@@ -1,0 +1,60 @@
+.management-page,
+.alerts-page {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+.management-page input[type="checkbox"],
+.alerts-page input[type="checkbox"] {
+    width: auto;
+    min-height: auto;
+    margin-right: 8px;
+}
+.management-page label:has(input[type="checkbox"]),
+.alerts-page label:has(input[type="checkbox"]) {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    grid-column: 1/-1;
+}
+.management-page form > p,
+.management-page form > div,
+.alerts-page form > div {
+    grid-column: 1/-1;
+}
+.management-page td:last-child,
+.alerts-page td:last-child {
+    min-width: 140px;
+}
+.management-page td .button,
+.alerts-page td .button {
+    margin: 3px;
+    font-size: 11px;
+    padding: 8px;
+}
+.management-page dialog,
+.alerts-page dialog {
+    max-width: 520px;
+    width: calc(100% - 32px);
+    color: var(--text);
+}
+dialog::backdrop {
+    background: #0009;
+}
+dialog .button {
+    margin: 4px;
+}
+.alerts-page form {
+    margin-top: 16px;
+}
+.alerts-page .badge {
+    margin-right: 8px;
+}
+.management-page .skeleton,
+.alerts-page .skeleton {
+    min-height: 70px;
+}
+.management-page h1,
+.alerts-page h1 {
+    margin-bottom: 8px;
+}

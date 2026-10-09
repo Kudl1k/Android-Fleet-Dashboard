@@ -1,0 +1,5 @@
+List of devices attached
+a device product:pixel
+b offline
+c unauthorized
+d recovery

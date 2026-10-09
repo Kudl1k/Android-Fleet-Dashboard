@@ -1,0 +1,4 @@
+Load: 1.2 / 1.1 / 1.0
+CPU usage from 4500ms to 500ms ago:
+  8% 1000/system_server: 4% user + 4% kernel
+12.5% TOTAL: 7.5% user + 5% kernel

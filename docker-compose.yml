@@ -1,0 +1,89 @@
+services:
+  android-manager:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      ANDROID_FLEET_FAKE_ADB: ${ANDROID_FLEET_FAKE_ADB:-true}
+      ANDROID_FLEET_POLL_INTERVAL: ${ANDROID_FLEET_POLL_INTERVAL:-30}
+      ANDROID_FLEET_HISTORY_PATH: /var/lib/android-fleet/metrics.sqlite3
+      ANDROID_FLEET_METRICS_INTERVAL: ${ANDROID_FLEET_METRICS_INTERVAL:-30}
+      ANDROID_FLEET_METRICS_COMMAND_TIMEOUT: ${ANDROID_FLEET_METRICS_COMMAND_TIMEOUT:-5}
+      ANDROID_FLEET_METRICS_CYCLE_TIMEOUT: ${ANDROID_FLEET_METRICS_CYCLE_TIMEOUT:-20}
+      ANDROID_FLEET_METRICS_PARALLEL_DEVICES: ${ANDROID_FLEET_METRICS_PARALLEL_DEVICES:-4}
+      ANDROID_FLEET_METRICS_MAX_AGE: ${ANDROID_FLEET_METRICS_MAX_AGE:-90}
+      ANDROID_FLEET_CAPABILITY_REFRESH_INTERVAL: ${ANDROID_FLEET_CAPABILITY_REFRESH_INTERVAL:-300}
+      ANDROID_FLEET_HISTORY_RETENTION_SECONDS: ${ANDROID_FLEET_HISTORY_RETENTION_SECONDS:-604800}
+      ANDROID_FLEET_HISTORY_MAX_POINTS: ${ANDROID_FLEET_HISTORY_MAX_POINTS:-1000000}
+      ANDROID_FLEET_REGISTRY_PATH: /var/lib/android-fleet/devices.sqlite3
+      ANDROID_FLEET_ALERTS_PATH: /var/lib/android-fleet/alerts.sqlite3
+      ANDROID_FLEET_ALERTS_INTERVAL: ${ANDROID_FLEET_ALERTS_INTERVAL:-5}
+      ANDROID_FLEET_SEED_FAKE_DEVICES: ${ANDROID_FLEET_SEED_FAKE_DEVICES:-true}
+      ANDROID_FLEET_MDNS: ${ANDROID_FLEET_MDNS:-false}
+      ANDROID_FLEET_CONNECT_TIMEOUT: ${ANDROID_FLEET_CONNECT_TIMEOUT:-10}
+      ANDROID_FLEET_BACKOFF_INITIAL: ${ANDROID_FLEET_BACKOFF_INITIAL:-2}
+      ANDROID_FLEET_BACKOFF_MAX: ${ANDROID_FLEET_BACKOFF_MAX:-60}
+      ANDROID_FLEET_RBAC_CREDENTIALS: ${ANDROID_FLEET_RBAC_CREDENTIALS:-}
+      ANDROID_FLEET_ANONYMOUS_VIEWER: ${ANDROID_FLEET_ANONYMOUS_VIEWER:-false}
+      ANDROID_FLEET_AUDIT_RETENTION_SECONDS: ${ANDROID_FLEET_AUDIT_RETENTION_SECONDS:-7776000}
+      ANDROID_FLEET_OPERATIONS_PATH: /var/lib/android-fleet/operations.sqlite3
+      ANDROID_FLEET_OPERATIONS_CONCURRENCY: ${ANDROID_FLEET_OPERATIONS_CONCURRENCY:-4}
+      ANDROID_FLEET_OPERATIONS_MAX_QUEUED: ${ANDROID_FLEET_OPERATIONS_MAX_QUEUED:-100}
+      ANDROID_FLEET_OPERATIONS_TIMEOUTS: ${ANDROID_FLEET_OPERATIONS_TIMEOUTS:-{}}
+      ANDROID_FLEET_OPERATIONS_TIMEOUT_SECONDS: ${ANDROID_FLEET_OPERATIONS_TIMEOUT_SECONDS:-30}
+      ANDROID_FLEET_APK_MAX_BYTES: ${ANDROID_FLEET_APK_MAX_BYTES:-67108864}
+      ANDROID_FLEET_SCREENSHOT_MAX_BYTES: ${ANDROID_FLEET_SCREENSHOT_MAX_BYTES:-16777216}
+      ANDROID_FLEET_SCREENSHOT_RETENTION_SECONDS: ${ANDROID_FLEET_SCREENSHOT_RETENTION_SECONDS:-3600}
+      ANDROID_FLEET_ALERTS_RETENTION_SECONDS: ${ANDROID_FLEET_ALERTS_RETENTION_SECONDS:-2592000}
+      ANDROID_FLEET_CONTROL_TOKEN: ${ANDROID_FLEET_CONTROL_TOKEN:-}
+      ADB_SERVER_HOST: ${ADB_SERVER_HOST:-}
+      ADB_SERVER_PORT: ${ADB_SERVER_PORT:-5037}
+      # The manager owns reconnect intent; ADB must not reconnect independently.
+      ADB_MDNS_AUTO_CONNECT: "0"
+    ports:
+      - "127.0.0.1:9000:8000"
+    volumes:
+      - adb-keys:/home/fleet/.android
+      - device-registry:/var/lib/android-fleet
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    ports:
+      - "127.0.0.1:${ANDROID_FLEET_FRONTEND_PORT:-8088}:8080"
+    depends_on:
+      android-manager:
+        condition: service_healthy
+    restart: unless-stopped
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+  grafana:
+    image: grafana/grafana:11.6.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:1900:3000"
+    restart: unless-stopped
+volumes:
+  adb-keys:
+  device-registry:
+  prometheus-data:
+  grafana-data:

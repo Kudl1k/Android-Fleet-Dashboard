@@ -1,0 +1,5 @@
+thermal_zone0|cpu-0|44000
+thermal_zone1|gpu|42000
+thermal_zone2|bcl_current|1000
+thermal_zone3|skin|35000
+thermal_zone4|bad|NaN

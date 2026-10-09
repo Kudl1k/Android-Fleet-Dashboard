@@ -1,0 +1,71 @@
+"""Public battery service values and optional signed sysfs current readings."""
+
+import math
+
+from android_fleet.adb.base import AdbClient
+from android_fleet.collectors.common import read_shell, snapshot, validate_timeout
+from android_fleet.devices.models import Device, DeviceCapability, DeviceState
+from android_fleet.metrics.catalog import valid_metric
+from android_fleet.metrics.models import MetricSnapshot, MetricValue
+
+
+def parse_battery(output: str) -> tuple[MetricValue, ...]:
+    fields: dict[str, float] = {}
+    for line in output.splitlines():
+        key, separator, raw = line.strip().partition(":")
+        if separator and key in {"level", "scale", "temperature", "voltage", "status", "health"}:
+            try:
+                value = float(raw.strip())
+            except ValueError:
+                continue
+            if math.isfinite(value):
+                fields[key] = value
+    values: list[MetricValue] = []
+    level, scale = fields.get("level"), fields.get("scale")
+    if level is not None and scale is not None and scale > 0 and 0 <= level <= scale:
+        values.append(MetricValue("battery_level", level / scale, "ratio"))
+    if "temperature" in fields:
+        values.append(MetricValue("battery_temperature", fields["temperature"] / 10, "celsius"))
+    if "voltage" in fields:
+        values.append(MetricValue("battery_voltage", fields["voltage"] / 1000, "volts"))
+    status = fields.get("status")
+    if status is not None and status.is_integer() and 1 <= status <= 5:
+        values.append(MetricValue("battery_status", status, "level"))
+        if status != 1:  # BATTERY_STATUS_UNKNOWN does not establish charging intent.
+            values.append(MetricValue("battery_charging", float(status == 2), "boolean"))
+    health = fields.get("health")
+    if health is not None and health.is_integer() and 1 <= health <= 7:
+        values.append(MetricValue("battery_health", health, "level"))
+    return tuple(value for value in values if valid_metric(value))
+
+
+def parse_battery_current(output: str) -> tuple[MetricValue, ...]:
+    try:
+        value = MetricValue("battery_current", float(output.strip()) / 1_000_000, "amperes")
+    except ValueError:
+        return ()
+    return (value,) if valid_metric(value) else ()
+
+
+class BatteryCollector:
+    def __init__(self, *, timeout: float = 5.0) -> None:
+        self._timeout = validate_timeout(timeout)
+
+    async def collect(self, device: Device, adb: AdbClient) -> MetricSnapshot:
+        if (
+            device.state != DeviceState.ONLINE
+            or DeviceCapability.BATTERY_METRICS not in device.capabilities
+        ):
+            return snapshot(device)
+        output = await read_shell(adb, device.serial, ("dumpsys", "battery"), self._timeout)
+        values = parse_battery(output) if output is not None else ()
+        # current_now is microamperes, signed according to the device driver.
+        current = await read_shell(
+            adb,
+            device.serial,
+            ("cat", "/sys/class/power_supply/battery/current_now"),
+            self._timeout,
+        )
+        if current is not None:
+            values += parse_battery_current(current)
+        return snapshot(device, values)

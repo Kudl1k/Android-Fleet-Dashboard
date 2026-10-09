@@ -1,0 +1,35 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+.env
+.env.*
+!.env.example
+.coverage
+htmlcov/
+node_modules/
+.DS_Store
+*.pem
+*.key
+adbkey*
+
+# Local persistent inventory and SQLite sidecars
+data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Acceptance artifacts, uploads and alternative SQLite filenames stay private.
+*.db
+*.db-wal
+*.db-shm
+*.apk
+**/control-artifacts/
+backups/
+
+*.tsbuildinfo

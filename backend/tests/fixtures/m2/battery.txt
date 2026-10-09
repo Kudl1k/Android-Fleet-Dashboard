@@ -1,0 +1,5 @@
+Current Battery Service state:
+level: 75
+scale: 100
+temperature: 285
+voltage: 4100

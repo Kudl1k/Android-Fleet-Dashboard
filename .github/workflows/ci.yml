@@ -1,0 +1,47 @@
+name: Fleet checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  backend:
+    env:
+      GRAFANA_ADMIN_PASSWORD: ci-config-only
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -e '.[dev]'
+      - run: pytest
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy src
+      - run: ruff check --config pyproject.toml ../scripts
+      - run: ruff format --config pyproject.toml --check ../scripts
+      - run: mypy --config-file pyproject.toml ../scripts
+      - run: docker compose -f ../docker-compose.yml config --quiet
+      - run: docker compose -f ../docker-compose.yml build android-manager
+  frontend:
+    runs-on: ubuntu-latest
+    env:
+      GRAFANA_ADMIN_PASSWORD: ci-config-only
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: docker compose -f ../docker-compose.yml build frontend

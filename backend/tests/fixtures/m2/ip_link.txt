@@ -1,0 +1,15 @@
+1: lo: <LOOPBACK,UP> mtu 65536
+    RX: bytes packets errors dropped missed mcast
+    100 1 0 0 0 0
+    TX: bytes packets errors dropped carrier collsns
+    100 1 0 0 0 0
+2: wlan0: <BROADCAST,UP> mtu 1500
+    RX: bytes packets errors dropped missed mcast
+    123456 12 0 0 0 0
+    TX: bytes packets errors dropped carrier collsns
+    654321 21 0 0 0 0
+3: rmnet_data0@if2: <UP> mtu 1500
+    RX: bytes packets errors dropped missed mcast
+    500 2 0 0 0 0
+    TX: bytes packets errors dropped carrier collsns
+    1000 3 0 0 0 0 0
