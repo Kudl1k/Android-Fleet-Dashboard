@@ -1,0 +1,332 @@
+"""Encrypted SSH profiles and explicit destination/identity authorization."""
+
+import asyncio
+import ipaddress
+import re
+import socket
+import sqlite3
+import time
+import uuid
+from pathlib import Path
+from typing import Any, Literal
+
+from cryptography.fernet import Fernet, InvalidToken
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+
+from android_fleet.security import Actor, SecurityService
+
+
+class ProfileInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=100)
+    host: str = Field(min_length=1, max_length=253)
+    port: int = Field(default=22, ge=1, le=65535, strict=True)
+    username: str = Field(min_length=1, max_length=128)
+    auth_method: Literal["key", "password"] = "key"
+    device_id: str | None = Field(default=None, max_length=128)
+    enabled: bool = Field(default=True, strict=True)
+    allowed_identities: list[str] = Field(default_factory=list, max_length=100)
+    credential: SecretStr | None = Field(default=None, min_length=1, max_length=65536)
+
+    @field_validator("allowed_identities")
+    @classmethod
+    def valid_identities(cls, values: list[str]) -> list[str]:
+        if any(not re.fullmatch(r"[\w.@-]{1,80}", value) for value in values):
+            raise ValueError("Invalid identity")
+        return list(dict.fromkeys(values))
+
+    @field_validator("host")
+    @classmethod
+    def valid_host(cls, value: str) -> str:
+        if not re.fullmatch(r"[a-zA-Z0-9.:-]+", value):
+            raise ValueError("Invalid host")
+        return value.lower()
+
+    @field_validator("username")
+    @classmethod
+    def valid_username(cls, value: str) -> str:
+        if not re.fullmatch(r"[\w.@-]+", value):
+            raise ValueError("Invalid username")
+        return value
+
+
+class Profile(ProfileInput):
+    id: str
+    created_at: float
+    updated_at: float
+    fingerprint: str | None = None
+    credential_ref: str
+    destination_ip: str
+    credential: SecretStr | None = Field(default=None, exclude=True)
+
+
+class FingerprintInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    fingerprint: str = Field(min_length=10, max_length=150)
+
+
+class ProfileService:
+    def __init__(self, path: Path, encryption_key: str | None, destinations: list[str]) -> None:
+        self._mutation_lock = asyncio.Lock()
+        self.path = path
+        self.cipher = Fernet(encryption_key.encode()) if encryption_key else None
+        self.destinations = frozenset(destinations)
+
+    async def initialize(self) -> None:
+        def init() -> None:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with sqlite3.connect(self.path) as db:
+                db.execute(
+                    "CREATE TABLE IF NOT EXISTS ssh_profiles "
+                    "(id TEXT PRIMARY KEY, profile TEXT NOT NULL, secret BLOB NOT NULL, "
+                    "host_key TEXT)"
+                )
+            self.path.chmod(0o600)
+
+        await asyncio.to_thread(init)
+
+    async def _query(self, sql: str, args: tuple[Any, ...] = ()) -> list[tuple[Any, ...]]:
+        def run() -> list[tuple[Any, ...]]:
+            with sqlite3.connect(self.path, timeout=30) as db:
+                return db.execute(sql, args).fetchall()
+
+        return await asyncio.to_thread(run)
+
+    async def get(self, profile_id: str) -> Profile:
+        rows = await self._query("SELECT profile FROM ssh_profiles WHERE id=?", (profile_id,))
+        if not rows:
+            raise HTTPException(404, "SSH profile not found")
+        return Profile.model_validate_json(rows[0][0])
+
+    async def list(self, actor: Actor) -> list[Profile]:
+        rows = await self._query("SELECT profile FROM ssh_profiles ORDER BY id")
+        profiles = [Profile.model_validate_json(row[0]) for row in rows]
+        return [
+            p
+            for p in profiles
+            if actor.role == "administrator" or actor.identity in p.allowed_identities
+        ]
+
+    async def destination(self, profile: ProfileInput) -> str:
+        if f"{profile.host}:{profile.port}" not in self.destinations:
+            raise HTTPException(403, "SSH destination is not approved")
+        if profile.port in {2375, 2376, 5037}:
+            raise HTTPException(403, "SSH destination port is prohibited")
+        loop = asyncio.get_running_loop()
+        try:
+            addresses = await asyncio.wait_for(
+                loop.getaddrinfo(profile.host, profile.port, type=socket.SOCK_STREAM), 5
+            )
+        except (OSError, TimeoutError) as exc:
+            raise HTTPException(400, "SSH destination resolution failed") from exc
+        ips = {str(item[4][0]) for item in addresses}
+        for value in ips:
+            ip = ipaddress.ip_address(value)
+            if ip.is_unspecified or ip.is_multicast or ip.is_link_local:
+                raise HTTPException(403, "SSH destination address is prohibited")
+        if not ips:
+            raise HTTPException(400, "SSH destination resolution failed")
+        pinned = getattr(profile, "destination_ip", None)
+        if pinned and pinned not in ips:
+            raise HTTPException(409, "SSH destination address changed; edit profile to reapprove")
+        return pinned or sorted(ips)[0]
+
+    async def authorize(self, profile_id: str, actor: Actor) -> Profile:
+        profile = await self.get(profile_id)
+        if (
+            "terminal:ssh" not in actor.permissions
+            or not profile.enabled
+            or (actor.role != "administrator" and actor.identity not in profile.allowed_identities)
+            or (
+                profile.device_id
+                and actor.device_ids is not None
+                and profile.device_id not in actor.device_ids
+            )
+        ):
+            raise HTTPException(403, "SSH profile access denied")
+        return profile
+
+    async def save(self, body: ProfileInput, profile_id: str | None = None) -> Profile:
+        async with self._mutation_lock:
+            return await self._save(body, profile_id)
+
+    async def _save(self, body: ProfileInput, profile_id: str | None = None) -> Profile:
+        address = await self.destination(body)
+        if self.cipher is None:
+            raise HTTPException(503, "SSH encryption key is not configured")
+        old = await self.get(profile_id) if profile_id else None
+        if not old and not body.credential:
+            raise HTTPException(422, "SSH credential required")
+        if old and body.auth_method != old.auth_method and not body.credential:
+            raise HTTPException(422, "Replacement credential required")
+        pid = profile_id or str(uuid.uuid4())
+        profile = Profile(
+            **body.model_dump(exclude={"credential"}),
+            id=pid,
+            created_at=old.created_at if old else time.time(),
+            updated_at=time.time(),
+            fingerprint=old.fingerprint
+            if old and (old.host, old.port) == (body.host, body.port)
+            else None,
+            credential_ref=pid,
+            destination_ip=address,
+        )
+        if body.credential:
+            raw = body.credential.get_secret_value()
+            if len(raw) > 65536 or not raw:
+                raise HTTPException(422, "Invalid SSH credential")
+            if body.auth_method == "key":
+                import asyncssh
+
+                try:
+                    asyncssh.import_private_key(raw)
+                except (ValueError, asyncssh.KeyImportError) as exc:
+                    raise HTTPException(422, "Invalid SSH private key") from exc
+            secret = self.cipher.encrypt(raw.encode())
+        else:
+            secret = (await self._query("SELECT secret FROM ssh_profiles WHERE id=?", (pid,)))[0][0]
+        key = None
+        if old and profile.fingerprint:
+            key = (await self._query("SELECT host_key FROM ssh_profiles WHERE id=?", (pid,)))[0][0]
+        await self._query(
+            "INSERT OR REPLACE INTO ssh_profiles VALUES(?,?,?,?)",
+            (pid, profile.model_dump_json(), secret, key),
+        )
+        return profile
+
+    async def credentials(self, profile: Profile) -> str:
+        async with self._mutation_lock:
+            return await self._credentials(profile)
+
+    async def _credentials(self, profile: Profile) -> str:
+        if self.cipher is None:
+            raise HTTPException(503, "SSH encryption key is not configured")
+        rows = await self._query("SELECT secret FROM ssh_profiles WHERE id=?", (profile.id,))
+        if not rows:
+            raise HTTPException(404, "SSH profile not found")
+        try:
+            return self.cipher.decrypt(rows[0][0]).decode()
+        except (InvalidToken, UnicodeDecodeError) as exc:
+            raise HTTPException(503, "SSH credential unavailable; check encryption key") from exc
+
+    async def rotate_encryption_key(self, encryption_key: str) -> None:
+        async with self._mutation_lock:
+            await self._rotate_encryption_key(encryption_key)
+
+    async def _rotate_encryption_key(self, encryption_key: str) -> None:
+        """Atomically reencrypt credentials; caller separately replaces managed key."""
+        if self.cipher is None:
+            raise ValueError("Existing encryption key is required")
+        replacement = Fernet(encryption_key.encode())
+        current = self.cipher
+
+        def rotate() -> None:
+            with sqlite3.connect(self.path, timeout=30) as db:
+                db.execute("BEGIN IMMEDIATE")
+                rows = db.execute("SELECT id,secret FROM ssh_profiles").fetchall()
+                for profile_id, encrypted in rows:
+                    db.execute(
+                        "UPDATE ssh_profiles SET secret=? WHERE id=?",
+                        (replacement.encrypt(current.decrypt(encrypted)), profile_id),
+                    )
+
+        await asyncio.to_thread(rotate)
+        self.cipher = replacement
+
+    async def host_key(self, profile_id: str) -> str | None:
+        rows = await self._query("SELECT host_key FROM ssh_profiles WHERE id=?", (profile_id,))
+        return str(rows[0][0]) if rows and rows[0][0] else None
+
+    def router(self, security: SecurityService) -> APIRouter:
+        from android_fleet.terminal.ssh import SSHGateway
+
+        gateway = SSHGateway(self)
+        router = APIRouter(prefix="/api/v1/ssh/profiles", tags=["SSH profiles"])
+
+        async def audit(actor: Actor, action: str) -> None:
+            await security.audit(actor, None, action, str(uuid.uuid4()), "allowed", "success")
+
+        @router.get("")
+        async def listing(request: Request) -> list[Profile]:
+            actor = await security.authorize(request, "terminal:view")
+            return await self.list(actor)
+
+        @router.post("")
+        async def create(request: Request, body: ProfileInput) -> Profile:
+            actor = await security.authorize(request, "terminal:profile:manage")
+            result = await self.save(body)
+            await audit(actor, "terminal.profile.create")
+            if body.credential:
+                await audit(actor, "terminal.credential.change")
+            return result
+
+        @router.put("/{profile_id}")
+        async def update(request: Request, profile_id: str, body: ProfileInput) -> Profile:
+            actor = await security.authorize(request, "terminal:profile:manage")
+            result = await self.save(body, profile_id)
+            await audit(actor, "terminal.profile.update")
+            if body.credential:
+                await audit(actor, "terminal.credential.change")
+            return result
+
+        @router.delete("/{profile_id}")
+        async def delete(request: Request, profile_id: str) -> dict[str, str]:
+            actor = await security.authorize(request, "terminal:profile:manage")
+            async with self._mutation_lock:
+                await self.get(profile_id)
+                await self._query("DELETE FROM ssh_profiles WHERE id=?", (profile_id,))
+            await audit(actor, "terminal.profile.delete")
+            return {"status": "deleted"}
+
+        @router.get("/{profile_id}/host-key")
+        async def candidate(request: Request, profile_id: str) -> dict[str, str]:
+            await security.authorize(request, "terminal:profile:manage")
+            key = await gateway.candidate(profile_id)
+            return {"fingerprint": key.get_fingerprint("sha256")}
+
+        @router.post("/{profile_id}/host-key")
+        async def approve(
+            request: Request, profile_id: str, body: FingerprintInput
+        ) -> dict[str, str]:
+            actor = await security.authorize(request, "terminal:profile:manage")
+            async with self._mutation_lock:
+                key = await gateway.candidate(profile_id)
+                if key.get_fingerprint("sha256") != body.fingerprint:
+                    raise HTTPException(409, "SSH host key fingerprint changed")
+                profile = await self.get(profile_id)
+                action = (
+                    "terminal.host_key.replace"
+                    if profile.fingerprint
+                    else "terminal.host_key.approve"
+                )
+                profile.fingerprint = body.fingerprint
+                profile.updated_at = time.time()
+                await self._query(
+                    "UPDATE ssh_profiles SET profile=?,host_key=? WHERE id=?",
+                    (profile.model_dump_json(), key.export_public_key().decode(), profile_id),
+                )
+                await audit(actor, action)
+            return {"fingerprint": body.fingerprint}
+
+        @router.post("/{profile_id}/test")
+        async def test(request: Request, profile_id: str) -> dict[str, str]:
+            actor = await security.authorize(request, "terminal:profile:manage")
+            try:
+                transport = await gateway.open(profile_id, actor, 80, 24)
+                await transport.close()
+            except HTTPException as exc:
+                await security.audit(
+                    actor,
+                    None,
+                    "terminal.profile.test",
+                    str(uuid.uuid4()),
+                    "denied" if exc.status_code == 403 else "allowed",
+                    "failed",
+                    error="permission_denied" if exc.status_code == 403 else "connection_failed",
+                )
+                raise
+            await audit(actor, "terminal.profile.test")
+            return {"status": "connected"}
+
+        return router

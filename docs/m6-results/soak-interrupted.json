@@ -1,0 +1,84 @@
+{
+  "status": "NOT RUN",
+  "reason": "User requested skipping remainder of long soak",
+  "elapsed_wall_seconds_since_launch": 137.258239030838,
+  "duration_scope": "wall clock from launch, including baseline resource sampling; not completed 60-minute acceptance",
+  "observations": [
+    {
+      "elapsed_minutes": 0.87,
+      "resources": {
+        "rss_bytes": 62767104,
+        "cpu_percent": 39.42,
+        "open_fds": 31,
+        "container_memory_bytes": 77504512,
+        "adb_forward_count": 2,
+        "owned_adb_forward_count": 2,
+        "transport_manifest_entries": 2,
+        "orphan_process_count": null
+      },
+      "metrics": {
+        "android_screen_active_sessions": 2.0,
+        "android_screen_active_viewers": 2.0,
+        "android_screen_active_controllers": 0.0,
+        "android_screen_session_failures_total": 0.0,
+        "android_screen_cleanup_failures_total": 0.0,
+        "android_screen_bytes_transferred_total": 139364.0,
+        "android_screen_dropped_frames_total": 0.0,
+        "android_screen_startup_duration_seconds_sum": 10.688717603683472,
+        "android_screen_startup_duration_seconds_count": 2.0,
+        "android_screen_resource_limit_rejections_total": 0.0
+      }
+    },
+    {
+      "elapsed_minutes": 2.04,
+      "resources": {
+        "rss_bytes": 63086592,
+        "cpu_percent": 32.3,
+        "open_fds": 27,
+        "container_memory_bytes": 78753792,
+        "adb_forward_count": 2,
+        "owned_adb_forward_count": 2,
+        "transport_manifest_entries": 2,
+        "orphan_process_count": null
+      },
+      "metrics": {
+        "android_screen_active_sessions": 2.0,
+        "android_screen_active_viewers": 2.0,
+        "android_screen_active_controllers": 0.0,
+        "android_screen_session_failures_total": 0.0,
+        "android_screen_cleanup_failures_total": 0.0,
+        "android_screen_bytes_transferred_total": 250572.0,
+        "android_screen_dropped_frames_total": 0.0,
+        "android_screen_startup_duration_seconds_sum": 10.688717603683472,
+        "android_screen_startup_duration_seconds_count": 2.0,
+        "android_screen_resource_limit_rejections_total": 0.0
+      }
+    },
+    {
+      "elapsed_minutes": 2.57,
+      "resources": {
+        "rss_bytes": 63135744,
+        "cpu_percent": 32.57,
+        "open_fds": 25,
+        "container_memory_bytes": 77983744,
+        "adb_forward_count": 0,
+        "owned_adb_forward_count": 0,
+        "transport_manifest_entries": 0,
+        "orphan_process_count": null
+      },
+      "metrics": {
+        "android_screen_active_sessions": 0.0,
+        "android_screen_active_viewers": 0.0,
+        "android_screen_active_controllers": 0.0,
+        "android_screen_session_failures_total": 0.0,
+        "android_screen_cleanup_failures_total": 0.0,
+        "android_screen_bytes_transferred_total": 277489.0,
+        "android_screen_dropped_frames_total": 0.0,
+        "android_screen_startup_duration_seconds_sum": 10.688717603683472,
+        "android_screen_startup_duration_seconds_count": 2.0,
+        "android_screen_resource_limit_rejections_total": 0.0
+      }
+    }
+  ],
+  "post_cleanup_verified": true
+}

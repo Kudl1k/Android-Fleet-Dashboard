@@ -1,50 +1,43 @@
-# M4.5 safe hardware and operation acceptance
+# M4.5 safe hardware and operation acceptance — 2026-10-09
 
-Hardware acceptance is **BLOCKED**, not passed. A localhost preflight was actually
-attempted with `curl --max-time 3 -s -o /dev/null -w '%{http_code}'
-http://127.0.0.1:9000/health`: exit 7, HTTP `000`. This runner could not establish a
-backend connection. No Samsung operation was submitted, no screenshot captured,
-and no destructive device action performed.
+**PASS** — actual deployed REST acceptance supersedes the historical runtime blocker.
+The existing registration named `Pixel` is non-rooted Samsung **SM-A356B**; this does
+not establish Google Pixel, rooted or other OEM acceptance. Backend ADB sees the
+previously authenticated wireless device; RSA keys persist across container recreation.
 
-| Check | Result | Evidence |
-|---|---|---|
-| Samsung approved properties | BLOCKED | Backend unreachable |
-| Samsung installed application listing | BLOCKED | Backend unreachable |
-| Samsung state | BLOCKED | Backend unreachable |
-| Samsung protected screenshot and image validity | BLOCKED | Backend unreachable |
-| Runtime screenshot unauthorized rejection | BLOCKED | Backend unreachable |
-| Runtime screenshot expiry and cleanup | BLOCKED | Backend unreachable |
-| Runtime operation transitions/history/audit | BLOCKED | Backend unreachable |
-| Offline, timeout, cancellation, restart and screenshot retention fixtures | PASS | `PYTHONPATH=backend/src .venv/bin/pytest backend/tests/test_control.py -q`: 34 passed |
-| Safe acceptance utility regression checks | PASS | `.venv/bin/pytest backend/tests/test_m4_safe_acceptance.py -q`: 20 passed |
-| Utility Ruff lint and formatting | PASS | `.venv/bin/ruff check scripts/m4_safe_acceptance.py backend/tests/test_m4_safe_acceptance.py`; corresponding `ruff format --check` |
+`scripts/m4_safe_acceptance.py` was executed through its `run` function with a private,
+temporary administrator token and the explicit existing registered Samsung identifier.
+Only the four approved actions were submitted by the utility. Values and pixels were
+not printed or published.
 
-These isolated tests do not establish hardware or deployment acceptance.
+| Action | Result | Actual observed states / evidence |
+| --- | --- | --- |
+| state | PASS | `succeeded` already present at submission response; transient earlier states were not invented. |
+| properties | PASS | `running` → `succeeded`; history and matching successful audit verified. |
+| apps.list | PASS | `running` → `succeeded`; history and matching successful audit verified. |
+| screenshot | PASS | `running` → `succeeded`; history and matching successful audit verified. PNG 1080×2340, 180,753 bytes, framing and chunk CRCs valid. |
 
-## Repeatable safe REST acceptance
+All four actions have persisted history and successful audit records. Browser acceptance
+made two additional approved screenshot captures while correcting the harness and
+verifying protected preview, giving six completed operations in total. No other successful
+hardware action was submitted. Unauthorized requests were rejected before execution.
 
-`scripts/m4_safe_acceptance.py` requires an explicit registered device identifier
-and an administrator bearer token supplied only via the `M4_ACCEPTANCE_TOKEN`
-environment variable. Obtain the token through a local secret workflow; do not
-paste it into commands, terminal transcripts or reports. After deployment and
-coordinator approval, run:
+Screenshot download: missing credentials 401, viewer 403, operator/administrator 200.
+Responses contain `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`.
+Actual screenshot naturally aged beyond temporary 120-second retention: HTTP 404 at
+152.3 seconds, and matching PNG absent from the container artifact directory. History
+and audit remained. The default 3600-second retention was restored; a full hour was
+not waited out. Desktop/mobile Chromium both decoded and displayed protected preview.
+No protected screenshot pixels were included in browser evidence screenshots.
 
-```sh
-.venv/bin/python scripts/m4_safe_acceptance.py --device-id '<registered Samsung identifier>'
-```
+Six completed operation rows and the pre-restart 67 audit rows survived backend restart
+and subsequent container recreations. Final automatic recreation reconnected Samsung
+in 3.1 seconds without pairing or manual ADB intervention. See
+[deployment evidence](M4_5_DEPLOYMENT.md) for the earlier transient deadline failure.
 
-The script permits only local HTTP backend URLs, disables proxies and redirects,
-and submits only `state`, `properties`, `apps.list` and `screenshot`. It polls for
-terminal state and the asynchronously appended successful audit record within a
-finite positive deadline, checks operation history, validates
-PNG framing and chunk checksums, and verifies unauthenticated screenshot denial.
-It does not display package/property values, write or render screenshot bytes,
-print tokens, or echo backend errors. Its output is sanitized status and image
-metadata only. Polling may miss brief running states; it records observed states
-rather than inventing them.
-
-The utility does not change production screenshot retention or wait through the
-default retention period. Runtime expiry acceptance remains a separate controlled
-check; do not claim it passed based on the fixture test. Reboot, install,
-uninstall, force-stop, bootloader/recovery and arbitrary shell acceptance are
-intentionally NOT RUN on hardware. Root was never requested.
+Previously completed fake-client timeout/offline/cancellation/recovery tests remain
+valid isolated evidence, not additional hardware acceptance. The existing offline
+registration was used for browser controls; Samsung was never deliberately disrupted.
+Reboot, recovery, bootloader, install/uninstall, force-stop, wake/lock, root and arbitrary
+shell acceptance were NOT RUN. No APK was installed or uninstalled. Unsupported vendor
+features and broader hardware remain outside this safe acceptance scope.

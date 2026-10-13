@@ -144,9 +144,10 @@ require explicit opt-in. Browser credentials/cache/previews expire safely. Final
 counts are 379 backend tests and 45 frontend tests, all checks passing. The 351/41
 counts above record the earlier M4 run, not deployed acceptance.
 
-Runtime acceptance remains BLOCKED after a fresh access retry: Docker Unix socket and
-loopback binding return `Operation not permitted`, Chromium cannot start and GitHub SSH
-DNS resolution fails. No active database backup, deployment, Samsung operation or runtime
-persistence success is claimed. Monitoring endpoints retain a separate unauthenticated
-local/trusted-network boundary. See [M4.5 validation](M4_5_VALIDATION.md) for exact checks,
-security fixes, safe backup/acceptance utilities and remaining prerequisites.
+The subsequent M4.5 runtime continuation completed verified active backups, deployment,
+role/audit/persistence, approved safe Samsung operations, protected screenshot expiry,
+desktop/mobile Chromium and backend restart/recreation checks. M4.5 is ready to close;
+M5 can begin within the current local-only boundary. Earlier sandbox failures above
+are historical. No destructive hardware operations or publication were performed.
+Monitoring retains a separate unauthenticated local/trusted-network boundary. See
+[M4.5 validation](M4_5_VALIDATION.md) for actual evidence and remaining design limits.

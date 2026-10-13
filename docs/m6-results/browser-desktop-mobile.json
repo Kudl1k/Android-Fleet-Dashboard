@@ -1,0 +1,242 @@
+[
+  {
+    "name": "chromium",
+    "version": "156.0.8078.4",
+    "mobile": false,
+    "status": "PASS",
+    "quality": [
+      {
+        "firstDecodedSeconds": 2.910700000286102,
+        "frames": 34,
+        "bytes": 25171,
+        "durationSeconds": 14.92060000038147,
+        "width": 224,
+        "height": 480,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nLow \u00b7 480 max edge / 15 FPS\nMedium \u00b7 720 max edge / 30 FPS\nHigh \u00b7 1080 max edge / 30 FPS\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n9.0 decoded/rendered FPS \u00b7 First frame 2881 ms \u00b7 2 kbit/s received \u00b7 34 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      },
+      {
+        "firstDecodedSeconds": 3.408,
+        "frames": 22,
+        "bytes": 40016,
+        "durationSeconds": 15.425,
+        "width": 336,
+        "height": 720,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nLow \u00b7 480 max edge / 15 FPS\nMedium \u00b7 720 max edge / 30 FPS\nHigh \u00b7 1080 max edge / 30 FPS\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n0.0 decoded/rendered FPS \u00b7 First frame 3384 ms \u00b7 0 kbit/s received \u00b7 22 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      },
+      {
+        "firstDecodedSeconds": 4.186900000095368,
+        "frames": 11,
+        "bytes": 57750,
+        "durationSeconds": 16.207,
+        "width": 496,
+        "height": 1080,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nLow \u00b7 480 max edge / 15 FPS\nMedium \u00b7 720 max edge / 30 FPS\nHigh \u00b7 1080 max edge / 30 FPS\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n0.0 decoded/rendered FPS \u00b7 First frame 4158 ms \u00b7 0 kbit/s received \u00b7 11 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      }
+    ],
+    "lifecycle": {
+      "created": 5,
+      "closed": 5
+    },
+    "pageErrors": []
+  },
+  {
+    "name": "chromium",
+    "version": "156.0.8078.4",
+    "mobile": true,
+    "status": "PASS",
+    "quality": [
+      {
+        "firstDecodedSeconds": 4.721,
+        "frames": 33,
+        "bytes": 24920,
+        "durationSeconds": 16.750700000286102,
+        "width": 224,
+        "height": 480,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nLow \u00b7 480 max edge / 15 FPS\nMedium \u00b7 720 max edge / 30 FPS\nHigh \u00b7 1080 max edge / 30 FPS\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n9.0 decoded/rendered FPS \u00b7 First frame 4687 ms \u00b7 2 kbit/s received \u00b7 33 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      },
+      {
+        "firstDecodedSeconds": 3.5587999997138975,
+        "frames": 29,
+        "bytes": 40662,
+        "durationSeconds": 15.569,
+        "width": 336,
+        "height": 720,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nLow \u00b7 480 max edge / 15 FPS\nMedium \u00b7 720 max edge / 30 FPS\nHigh \u00b7 1080 max edge / 30 FPS\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n5.0 decoded/rendered FPS \u00b7 First frame 3533 ms \u00b7 2 kbit/s received \u00b7 27 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      },
+      {
+        "firstDecodedSeconds": 3.4127999997138976,
+        "frames": 34,
+        "bytes": 58841,
+        "durationSeconds": 15.4275,
+        "width": 496,
+        "height": 1080,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nLow \u00b7 480 max edge / 15 FPS\nMedium \u00b7 720 max edge / 30 FPS\nHigh \u00b7 1080 max edge / 30 FPS\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n10.0 decoded/rendered FPS \u00b7 First frame 3388 ms \u00b7 4 kbit/s received \u00b7 34 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      }
+    ],
+    "lifecycle": {
+      "created": 5,
+      "closed": 5
+    },
+    "pageErrors": []
+  },
+  {
+    "name": "firefox",
+    "version": "157.0",
+    "mobile": false,
+    "status": "PASS",
+    "quality": [
+      {
+        "firstDecodedSeconds": 3.428,
+        "frames": 33,
+        "bytes": 25091,
+        "durationSeconds": 15.44,
+        "width": 224,
+        "height": 480,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n0.0 decoded/rendered FPS \u00b7 First frame 3376 ms \u00b7 0 kbit/s received \u00b7 33 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      },
+      {
+        "firstDecodedSeconds": 3.44,
+        "frames": 45,
+        "bytes": 41386,
+        "durationSeconds": 15.457,
+        "width": 336,
+        "height": 720,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n0.0 decoded/rendered FPS \u00b7 First frame 3391 ms \u00b7 0 kbit/s received \u00b7 45 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      },
+      {
+        "firstDecodedSeconds": 3.705,
+        "frames": 22,
+        "bytes": 58958,
+        "durationSeconds": 15.723,
+        "width": 496,
+        "height": 1080,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n0.0 decoded/rendered FPS \u00b7 First frame 3656 ms \u00b7 0 kbit/s received \u00b7 22 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      }
+    ],
+    "lifecycle": {
+      "created": 5,
+      "closed": 5
+    },
+    "pageErrors": []
+  },
+  {
+    "name": "firefox",
+    "version": "157.0",
+    "mobile": true,
+    "status": "PASS",
+    "quality": [
+      {
+        "firstDecodedSeconds": 3.688,
+        "frames": 11,
+        "bytes": 24489,
+        "durationSeconds": 15.707,
+        "width": 224,
+        "height": 480,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n0.0 decoded/rendered FPS \u00b7 First frame 3639 ms \u00b7 0 kbit/s received \u00b7 11 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      },
+      {
+        "firstDecodedSeconds": 3.51,
+        "frames": 34,
+        "bytes": 41190,
+        "durationSeconds": 15.525,
+        "width": 336,
+        "height": 720,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n1.0 decoded/rendered FPS \u00b7 First frame 3461 ms \u00b7 0 kbit/s received \u00b7 34 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      },
+      {
+        "firstDecodedSeconds": 3.418,
+        "frames": 33,
+        "bytes": 58861,
+        "durationSeconds": 15.441,
+        "width": 496,
+        "height": 1080,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n0.0 decoded/rendered FPS \u00b7 First frame 3370 ms \u00b7 0 kbit/s received \u00b7 33 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      }
+    ],
+    "lifecycle": {
+      "created": 5,
+      "closed": 5
+    },
+    "pageErrors": []
+  },
+  {
+    "name": "webkit",
+    "version": "27.2",
+    "mobile": false,
+    "status": "PASS",
+    "quality": [
+      {
+        "firstDecodedSeconds": 3.116,
+        "frames": 11,
+        "bytes": 24476,
+        "durationSeconds": 15.125,
+        "width": 224,
+        "height": 480,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n0.0 decoded/rendered FPS \u00b7 First frame 3079 ms \u00b7 0 kbit/s received \u00b7 11 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      },
+      {
+        "firstDecodedSeconds": 3.515,
+        "frames": 44,
+        "bytes": 41034,
+        "durationSeconds": 15.534,
+        "width": 336,
+        "height": 720,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n0.0 decoded/rendered FPS \u00b7 First frame 3488 ms \u00b7 0 kbit/s received \u00b7 44 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      },
+      {
+        "firstDecodedSeconds": 3.791,
+        "frames": 23,
+        "bytes": 58730,
+        "durationSeconds": 15.803,
+        "width": 496,
+        "height": 1080,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n0.0 decoded/rendered FPS \u00b7 First frame 3761 ms \u00b7 0 kbit/s received \u00b7 23 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      }
+    ],
+    "lifecycle": {
+      "created": 5,
+      "closed": 5
+    },
+    "pageErrors": []
+  },
+  {
+    "name": "webkit",
+    "version": "27.2",
+    "mobile": true,
+    "status": "PASS",
+    "quality": [
+      {
+        "firstDecodedSeconds": 3.115,
+        "frames": 33,
+        "bytes": 25159,
+        "durationSeconds": 15.132,
+        "width": 224,
+        "height": 480,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n0.0 decoded/rendered FPS \u00b7 First frame 3091 ms \u00b7 0 kbit/s received \u00b7 33 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      },
+      {
+        "firstDecodedSeconds": 3.492,
+        "frames": 35,
+        "bytes": 41189,
+        "durationSeconds": 15.517,
+        "width": 336,
+        "height": 720,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n0.0 decoded/rendered FPS \u00b7 First frame 3466 ms \u00b7 0 kbit/s received \u00b7 33 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      },
+      {
+        "firstDecodedSeconds": 3.475,
+        "frames": 11,
+        "bytes": 57850,
+        "durationSeconds": 15.492,
+        "width": 496,
+        "height": 1080,
+        "hud": "Live Screen\n\nAuthorized ADB video \u00b7 View-only\n\nStreaming\nStream quality\nStart view-only\nStop stream\nRequest control\nFullscreen\n\n0.0 decoded/rendered FPS \u00b7 First frame 3436 ms \u00b7 0 kbit/s received \u00b7 11 received frames \u00b7 0 dropped frames \u00b7 Input disabled\n\nBack\nHome\nRecent apps\nWake screen\nVolume \u2212\nVolume +\n\nQuality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization."
+      }
+    ],
+    "lifecycle": {
+      "created": 5,
+      "closed": 5
+    },
+    "pageErrors": []
+  }
+]

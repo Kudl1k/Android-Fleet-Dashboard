@@ -115,14 +115,28 @@ def test_invalid_freshness_settings_rejected(max_age: float) -> None:
 def test_versioned_dashboards_use_supported_metrics_and_prometheus_datasource() -> None:
     root = Path(__file__).resolve().parents[2] / "monitoring" / "grafana"
     files = sorted((root / "dashboards").glob("*.json"))
-    assert len(files) == 2
+    assert {path.name for path in files} == {
+        "fleet-overview.json",
+        "device-detail.json",
+        "streaming.json",
+    }
     known = {
         *METRICS.values(),
         "android_device_up",
         "android_metrics_last_collection_timestamp_seconds",
+        "android_screen_active_sessions",
+        "android_screen_active_viewers",
+        "android_screen_active_controllers",
+        "android_screen_startup_duration_seconds_sum",
+        "android_screen_startup_duration_seconds_count",
+        "android_screen_bytes_transferred_total",
+        "android_screen_dropped_frames_total",
+        "android_screen_session_failures_total",
+        "android_screen_cleanup_failures_total",
+        "android_screen_resource_limit_rejections_total",
     }
     dashboards = [json.loads(path.read_text()) for path in files]
-    assert len({dashboard["uid"] for dashboard in dashboards}) == 2
+    assert len({dashboard["uid"] for dashboard in dashboards}) == 3
     for dashboard in dashboards:
         assert dashboard["schemaVersion"] >= 39
         assert dashboard["editable"]

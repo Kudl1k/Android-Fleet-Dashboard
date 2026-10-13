@@ -29,28 +29,30 @@ def backup_databases(data_dir: Path, keys_dir: Path) -> dict[str, Any]:
         target = destination / source.name
         target.touch(mode=0o600, exist_ok=False)
         # The backup API includes committed WAL data and creates a coherent snapshot.
-        with sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True) as original:
-            with sqlite3.connect(target) as copied:
-                original.backup(copied)
-                integrity = copied.execute("PRAGMA integrity_check").fetchall()
-                if integrity != [("ok",)]:
-                    raise ValueError("Backup integrity check failed")
-                tables = copied.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' "
-                    "AND name NOT LIKE 'sqlite_%' ORDER BY name"
-                ).fetchall()
-                counts = {
-                    name: copied.execute(
-                        'SELECT COUNT(*) FROM "' + name.replace('"', '""') + '"'
-                    ).fetchone()[0]
-                    for (name,) in tables
-                }
-                record: dict[str, Any] = {"integrity": "ok", "table_counts": counts}
-                if source.name == "devices.sqlite3" and "devices" in counts:
-                    record["device_identifiers"] = [
-                        row[0] for row in copied.execute("SELECT id FROM devices ORDER BY id")
-                    ]
-                result["databases"][source.name] = record
+        with (
+            sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True) as original,
+            sqlite3.connect(target) as copied,
+        ):
+            original.backup(copied)
+            integrity = copied.execute("PRAGMA integrity_check").fetchall()
+            if integrity != [("ok",)]:
+                raise ValueError("Backup integrity check failed")
+            tables = copied.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "AND name NOT LIKE 'sqlite_%' ORDER BY name"
+            ).fetchall()
+            counts = {
+                name: copied.execute(
+                    'SELECT COUNT(*) FROM "' + name.replace('"', '""') + '"'
+                ).fetchone()[0]
+                for (name,) in tables
+            }
+            record: dict[str, Any] = {"integrity": "ok", "table_counts": counts}
+            if source.name == "devices.sqlite3" and "devices" in counts:
+                record["device_identifiers"] = [
+                    row[0] for row in copied.execute("SELECT id FROM devices ORDER BY id")
+                ]
+            result["databases"][source.name] = record
     manifest = destination / "manifest.json"
     manifest.touch(mode=0o600, exist_ok=False)
     manifest.write_text(json.dumps(result, indent=2) + "\n")

@@ -1,0 +1,34 @@
+[
+  {
+    "status": "PASS",
+    "mobile": false,
+    "version": "156.0.8078.4",
+    "stats": {
+      "created": 4,
+      "input": 3,
+      "resize": 9,
+      "ansi": true,
+      "ssh": true,
+      "echo": true,
+      "ctrl": true
+    },
+    "fullFakePairingWizard": true,
+    "pageErrors": []
+  },
+  {
+    "status": "PASS",
+    "mobile": true,
+    "version": "156.0.8078.4",
+    "stats": {
+      "created": 4,
+      "input": 3,
+      "resize": 9,
+      "ansi": true,
+      "ssh": true,
+      "echo": true,
+      "ctrl": true
+    },
+    "fullFakePairingWizard": true,
+    "pageErrors": []
+  }
+]

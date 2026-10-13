@@ -4,8 +4,8 @@ Every protected API checks an operation permission on the server. Role membershi
 
 | Role | Permissions |
 | --- | --- |
-| Viewer | `device.read`, `telemetry.read`, `alerts.read`, `operations.read` |
-| Operator | Viewer permissions plus `control.inspect`, `control.screen`, `apps.launch`, `apps.stop`, `operations.cancel` |
+| Viewer | `device.read`, `telemetry.read`, `alerts.read`, `operations.read`, `screen:view` |
+| Operator | Viewer permissions plus `control.inspect`, `control.screen`, `apps.launch`, `apps.stop`, `operations.cancel`, `screen:control`, `screen:session:terminate` |
 | Administrator | Operator permissions plus `device.manage`, `alerts.manage`, `apps.install`, `apps.uninstall`, `control.reboot`, `control.reboot_special`, `audit.read`, `security.manage` |
 
 Operation cancellation additionally checks ownership for operators. Administrator permissions do not bypass package validation, protected-package checks, explicit destructive confirmation, Android restrictions, upload validation or command allowlists.
@@ -46,3 +46,20 @@ The backend stores audit history in `security.sqlite3` beside the registry datab
 Administrators may query `GET /api/v1/audit`, with `actor`, `device_id`, `action`, `authorization`, `outcome`, `limit` (1–200) and `offset` filters. Results contain `items`, `total`, `limit`, `offset`; timestamps are Unix seconds. Operators and viewers cannot read the audit trail.
 
 `ANDROID_FLEET_AUDIT_RETENTION_SECONDS` controls retention (90 days by default). Startup and maintenance remove expired rows; ordinary writes append records. SQLite can reuse freed pages; removal does not promise forensic erasure. Database backup and filesystem permissions remain the deployment owner's responsibility. This is an application append-only trail, not cryptographic tamper evidence: a host administrator with database or code access can alter history. There is no public audit mutation API, export forwarding or immutable external archive in M4.
+
+## M5 screen sessions
+
+Viewers and operators may create authenticated view-only screen sessions. Operators and administrators may acquire interactive control or terminate their own sessions. Terminating another actor's session requires administrator status. Screen sessions remain owned by their creating identity; knowing a UUID cannot grant access. Owners may stop their own sessions with `screen:view`. Administrators may terminate another actor's session through the explicit terminate endpoint, subject to device scope. Exclusive control is released on disconnect, timeout, failure, stop or restart and must be requested again explicitly.
+
+Named credentials may include optional `device_ids`, a list of registered UUIDs. An omitted value retains fleet-wide access; an empty list permits no devices for screen actions. **This scope is enforced for M5 screen permissions only; it does not scope pre-existing monitoring or M4 operations.** Do not rely on it as a fleet-wide isolation policy. Anonymous compatibility reads do not authorize screen viewing.
+
+Screen audit events record session start/stop, control acquisition/release and denied authorization/session access. They record neither individual keystrokes nor text, clipboard data or video. Stream tickets are random, short-lived, single-use and session-bound; existing REST authentication issues them. They are not an independent identity system. Credential configuration changes still require backend restart.
+
+## M7 permissions
+
+All authenticated roles receive terminal:view for their own metadata. Administrator
+receives terminal:adb, terminal:ssh, terminal:profile:manage and terminal:session:terminate.
+Operators have no terminal creation permission by default; named operator RBAC records
+may explicitly grant terminal:adb/terminal:ssh/terminal:session:terminate through the
+permissions array. Viewers cannot receive these grants. Profile ACLs do not bypass global
+permission or device scope. Pairing endpoints require security.manage (administrator).

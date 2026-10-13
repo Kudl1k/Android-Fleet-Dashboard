@@ -17,13 +17,24 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from android_fleet.core.settings import Settings
 
-READ = frozenset({"device.read", "telemetry.read", "alerts.read", "operations.read"})
+READ = frozenset(
+    {
+        "device.read",
+        "telemetry.read",
+        "alerts.read",
+        "operations.read",
+        "screen:view",
+        "terminal:view",
+    }
+)
 OPERATOR = READ | {
     "control.inspect",
     "control.screen",
     "apps.launch",
     "apps.stop",
     "operations.cancel",
+    "screen:control",
+    "screen:session:terminate",
 }
 ADMIN = OPERATOR | {
     "device.manage",
@@ -34,6 +45,10 @@ ADMIN = OPERATOR | {
     "control.reboot_special",
     "audit.read",
     "security.manage",
+    "terminal:adb",
+    "terminal:ssh",
+    "terminal:profile:manage",
+    "terminal:session:terminate",
 }
 ROLE_PERMISSIONS = {"viewer": READ, "operator": OPERATOR, "administrator": ADMIN}
 
@@ -43,6 +58,7 @@ class Actor:
     identity: str
     role: str
     permissions: frozenset[str]
+    device_ids: frozenset[str] | None = None
 
 
 class SecurityService:
@@ -90,8 +106,37 @@ class SecurityService:
                         raise ValueError
                     identities.add(identity)
                     hashes.add(digest)
+                    scope = record.get("device_ids")
+                    explicit = record.get("permissions", [])
+                    terminal_permissions = {
+                        "terminal:adb",
+                        "terminal:ssh",
+                        "terminal:session:terminate",
+                    }
+                    if (
+                        not isinstance(explicit, list)
+                        or any(item not in terminal_permissions for item in explicit)
+                        or (role == "viewer" and explicit)
+                    ):
+                        raise ValueError
+                    if scope is not None and (
+                        not isinstance(scope, list)
+                        or any(
+                            not isinstance(item, str) or not item or len(item) > 128
+                            for item in scope
+                        )
+                    ):
+                        raise ValueError
                     self._credentials.append(
-                        (digest, Actor(identity, role, ROLE_PERMISSIONS[role]))
+                        (
+                            digest,
+                            Actor(
+                                identity,
+                                role,
+                                ROLE_PERMISSIONS[role] | frozenset(explicit),
+                                frozenset(scope) if scope is not None else None,
+                            ),
+                        )
                     )
             except (ValueError, TypeError, KeyError) as exc:
                 raise ValueError("Invalid RBAC credential configuration") from exc
@@ -151,7 +196,11 @@ class SecurityService:
         actor = self.actor(request)
         request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
         request.state.request_id = request_id
-        if actor is None or permission not in actor.permissions:
+        if (
+            actor is None
+            or permission not in actor.permissions
+            or (permission.startswith(("screen:", "terminal:")) and actor.identity == "anonymous")
+        ):
             await self.audit(
                 actor or Actor("unauthenticated", "none", frozenset()),
                 request.path_params.get("device_id")
@@ -165,6 +214,23 @@ class SecurityService:
             raise HTTPException(401 if actor is None else 403, "Permission denied")
         request.state.actor = actor
         return actor
+
+    async def authorize_device(self, actor: Actor, device_id: str, permission: str) -> None:
+        if (
+            permission not in actor.permissions
+            or (actor.device_ids is not None and device_id not in actor.device_ids)
+            or actor.identity == "anonymous"
+        ):
+            await self.audit(
+                actor,
+                device_id,
+                permission,
+                str(uuid.uuid4()),
+                "denied",
+                "rejected",
+                error="permission_denied",
+            )
+            raise HTTPException(403, "Permission denied")
 
     async def audit(
         self,

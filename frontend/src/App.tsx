@@ -14,6 +14,7 @@ const AuditPage = lazy(() => import("./features/control/AuditPage"));
 const FleetPage = lazy(() => import("./features/fleet/FleetPage"));
 const DevicePage = lazy(() => import("./features/fleet/DevicePage"));
 const AlertsPage = lazy(() => import("./features/alerts/AlertsPage"));
+const SSHConnectionsPage = lazy(() => import("./features/terminal/SSHConnectionsPage"));
 const ManagementPage = lazy(() => import("./features/management/ManagementPage"));
 import { PollContext } from "./lib/hooks";
 import { useAlertNotifications } from "./lib/alertNotifications";
@@ -64,6 +65,7 @@ export default function App() {
                             <Settings size={19} />
                             Device management
                         </NavLink>
+                        {(auth.can("terminal:view") || auth.can("terminal:profile:manage")) && <NavLink to="/ssh"><ShieldCheck size={19} />SSH Connections</NavLink>}
                         <NavLink to="/operations"><Activity size={19} />Operations</NavLink>
                         {auth.can("audit.read") && <NavLink to="/audit"><ShieldCheck size={19} />Audit log</NavLink>}
                     </nav>
@@ -125,6 +127,7 @@ export default function App() {
                                 path="/devices/:id"
                                 element={<DevicePage />}
                             />
+                            <Route path="/ssh" element={<SSHConnectionsPage />} />
                             <Route path="/alerts" element={<AlertsPage />} />
                             <Route path="/operations" element={<OperationsPage />} />
                             <Route path="/audit" element={<AuditPage />} />

@@ -1,4 +1,6 @@
 import DeviceControl from "../control/DeviceControl";
+import LiveScreen from "../screen/LiveScreen";
+import TerminalPanel from "../terminal/TerminalPanel";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -418,6 +420,8 @@ export default function DevicePage() {
                 </section>
             </div>
             <DeviceControl id={id} online={d.state === "online"} />
+            <LiveScreen key={id} id={id} online={d.state === "online"} />
+            <TerminalPanel key={`terminal-${id}`} deviceId={id} online={d.state === "online"} />
             <div className="page-heading">
                 <div>
                     <h2>Historical telemetry</h2>

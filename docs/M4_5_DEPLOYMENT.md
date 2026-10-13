@@ -1,67 +1,73 @@
 # M4.5 deployment and preservation evidence — 2026-10-09
 
-Deployment remains **BLOCKED** by access to the existing Docker socket. No containers
-were changed, no migration was executed, no persistent volume was deleted, and no
-ADB credentials were copied or displayed.
+**PASS** — runtime continuation 19:55–20:03 UTC supersedes the previous sandbox
+blockers. Docker server 29.5.2, running Colima and all localhost services are reachable.
+GitHub DNS and HTTPS succeed. No SSH login, commit or publication attempted.
 
-## Executed preflight
+## Backup before deployment
 
-| Check / command | Result | Evidence |
+Actual manager mounts are `adb-dashboard_adb-keys:/home/fleet/.android` and
+`adb-dashboard_device-registry:/var/lib/android-fleet`. Both RSA key files exist;
+contents were never displayed. `scripts/backup_databases.py` ran in the active manager
+before any replacement. Every copied database passed `PRAGMA integrity_check`.
+
+Private backup directory:
+`/var/lib/android-fleet/backups/20261009T195558Z-fe9c2bce55f14964861de424fe124265`.
+A second copy at `/private/tmp/m45-runtime/predeployment-backup` was independently
+integrity-checked on the host. Directory permissions are 0700, original snapshots and
+manifest 0600. SQLite backup includes committed WAL. These are individually consistent
+snapshots; ongoing collection means there is no cross-database atomic snapshot.
+
+| Active database | Before deployment | Final verified backup |
 | --- | --- | --- |
-| `docker context ls` | PASS | Existing selected context is `colima`, socket `/Users/homelab/.colima/default/docker.sock`; contexts were not changed. |
-| `docker-compose ps`, `docker --context colima ps` | BLOCKED | Permission denied connecting to that socket. |
-| `docker --context colima-edit ps` | BLOCKED | `/Users/homelab/.colima/edit/docker.sock` does not exist. |
-| `docker --context default ps` | BLOCKED | `/var/run/docker.sock` does not exist. |
-| `colima status` | FAIL | Reports `colima is not running`; this does not establish daemon state when socket access is denied. Colima was not restarted. |
-| `DOCKER_BUILDKIT=0 COMPOSE_BAKE=false docker-compose build android-manager frontend` | BLOCKED | Same Docker socket permission denial; no successful image builds. |
-| Database backup / active volume inspection | BLOCKED | Container filesystem cannot be accessed without Docker socket access. |
-| Restart, migration, persistence, ADB reconnect acceptance | NOT RUN | Requires active database backup and runtime access first. |
+| devices.sqlite3 | 5 registrations | 5 registrations |
+| alerts.sqlite3 | 8 rules, 4 events | 8 rules, 5 events |
+| metrics.sqlite3 | 64,753 samples | 66,262 samples |
+| operations.sqlite3 | Absent | 6 completed operations |
+| security.sqlite3 | Absent | 145 audit rows |
 
-The Compose declaration preserves `adb-keys:/home/fleet/.android` and
-`device-registry:/var/lib/android-fleet`, backend user UID 10001, and loopback ports
-8088, 9000, 1900, 9090. This is configuration inspection, not confirmation of actual
-running mounts. Active database paths, registered identifiers and record counts
-cannot be reported until inspected in the running container.
+The historical `devices.pre-m2-20261009T141428Z.sqlite3` snapshot was also backed up
+and integrity-checked; it is not the active registry. Final backup:
+`/var/lib/android-fleet/backups/20261009T200324Z-7edf538b8cb247aa866ea7907f0b302a`,
+also copied to `/private/tmp/m45-runtime/final-backup`. All six snapshots pass integrity.
 
-## Consistent backup utility
+## Build and deployment
 
-`scripts/backup_databases.py` uses SQLite's backup API, including committed WAL
-records, and verifies every copied database using `PRAGMA integrity_check`. It
-creates an unpredictable timestamped directory with mode 0700 and databases and a
-manifest with mode 0600. It reports table counts, registry IDs and presence of ADB
-key files, never credential contents. It does not remove any database or backup.
-Each database has a consistent individual snapshot; the collection is not a single
-cross-database transaction. Stop externally initiated mutations during backup and
-record that telemetry collection may continue.
+Executed `docker-compose build android-manager frontend` successfully. Compose warns
+that buildx is absent, then builds successfully using the classic builder. Backend image
+`6d190cf6bae6`; frontend `f8257650f63a`. Frontend TypeScript/Vite production build passes.
+Application code was unchanged; dependencies remain unlocked as already documented.
 
-After Docker access is restored, inspect mounts, then run before container changes:
+Only these two services were recreated with `up -d --no-deps`. A private temporary
+Compose override appended three acceptance role hashes while preserving existing
+credentials, and set screenshot retention to 120 seconds. `.env` remained unchanged.
+After acceptance, normal `docker-compose up -d --no-deps android-manager` restored
+existing credentials and 3600-second retention. All temporary tokens now return 401.
 
-```bash
-docker-compose exec -T android-manager python - < scripts/backup_databases.py
-```
+Final backend `/health`, `/ready`, frontend `/frontend-health`, Prometheus `/-/ready`
+and Grafana `/api/health` return 200. Both application containers are healthy. All four
+ports retain loopback binding: 8088, 9000, 1900, 9090; 5037 is not published.
 
-Keep the manifest private: registered device identifiers are operational data.
-Require exit code zero and `integrity: ok` for every expected database. Never treat
-partial backup output as successful. The backup defaults to the deployment's
-`/var/lib/android-fleet` directory; supply `--data-dir` if inspection shows otherwise.
-To execute offline, use `python scripts/backup_databases.py --data-dir PATH --keys-dir PATH`.
+## Persistence and recovery
 
-Automated isolated-fixture verification **PASS**: three tests cover live WAL,
-private permissions, unique destinations, credential-content exclusion, registry
-counts, missing/symlink databases and corrupt databases. Command:
-`.venv/bin/pytest backend/tests/test_backup_databases.py -q` → `3 passed`.
-Ruff lint passes for the utility and tests.
+Backup-to-live SQL comparisons found zero missing original registration configuration,
+rule rows, stable event fields or telemetry rows. Reconnect timestamps and event
+state/body change through normal monitoring. Counts alone were not used as proof.
 
-## Coordinated acceptance once access is restored
+Before restart, a second verified backup recorded six completed operations and 67 audit
+rows. `docker-compose restart android-manager` restored readiness and Samsung online;
+all those operation/audit rows survived unchanged. Final comparisons again found zero
+missing rows; audit increased through browser sign-in/denial/revocation acceptance.
 
-1. Inspect project mounts and record baseline counts using the verified backup manifest.
-2. Build only `android-manager` and `frontend`; run `docker-compose up -d android-manager frontend`.
-3. Verify `/health`, `/ready`, authenticated APIs, frontend, Prometheus target and Grafana.
-4. Exercise Samsung only through `state`, `properties`, `apps.list`, `screenshot` operations;
-   poll persisted results and verify audit records and protected image download.
-5. Preserve screenshot privacy; verify only PNG structure and unauthorized denial.
-6. Record persistent counts, restart only the backend, compare preserved records and
-   ADB key presence, then verify paired-device reconnection. Do not replay mutations.
+One recreation while restoring normal settings remained offline after a 30-second
+wait. Diagnostic `SubprocessAdbClient.connect` succeeded with existing RSA trust.
+To distinguish manual recovery from automatic acceptance, a final clean
+`docker-compose up -d --no-deps --force-recreate android-manager` was executed and
+observed exclusively through HTTP: Samsung online and `/ready` 200 after 3.1 seconds,
+without manual ADB intervention or new pairing. The transient deadline failure is retained.
 
-No real Samsung or restart evidence is supplied by this document. Hardware actions,
-backup execution and container changes remain coordinated by the lead agent.
+Prometheus target `android-manager:8000` is up with empty `lastError`; query `up` = 1.
+Grafana 11.6.0 health is OK; authenticated Prometheus datasource health HTTP 200:
+“Successfully queried the Prometheus API.” Monitoring containers kept their earlier
+creation times and were not recreated/restarted. No volume deletion, Colima changes,
+unrelated Docker-stack changes, public exposure or destructive hardware actions occurred.

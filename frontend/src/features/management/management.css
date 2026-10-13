@@ -54,6 +54,25 @@ dialog .button {
 .alerts-page .skeleton {
     min-height: 70px;
 }
+.pairing-network-settings form,
+.pairing-network-row {
+    display: flex;
+    align-items: end;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.pairing-network-settings form label {
+    flex: 1 1 260px;
+}
+.pairing-network-row {
+    justify-content: space-between;
+    border-top: 1px solid var(--border);
+    padding: 10px 0;
+}
+.pairing-network-row span {
+    display: grid;
+    gap: 4px;
+}
 .management-page h1,
 .alerts-page h1 {
     margin-bottom: 8px;

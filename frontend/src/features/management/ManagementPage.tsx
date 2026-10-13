@@ -6,6 +6,8 @@ import { useAuth } from "../../lib/auth";
 import { PollContext } from "../../lib/hooks";
 import { useToast } from "../../lib/toast";
 import Confirmation from "./Confirmation";
+import PairingWizard, { WirelessPortUpdate } from "./PairingWizard";
+import PairingNetworkSettings from "./PairingNetworkSettings";
 import "./management.css";
 
 type Device = {
@@ -103,6 +105,8 @@ export default function ManagementPage() {
                     management. It stays in memory for this session.
                 </p>
             )}
+            <PairingWizard />
+            <PairingNetworkSettings />
             <section className="panel">
                 <h2>{editing ? `Edit ${editing.name}` : "Register device"}</h2>
                 <form onSubmit={save} className="grid">
@@ -291,6 +295,7 @@ export default function ManagementPage() {
                                             : "Disabled"}
                                     </td>
                                     <td>
+                                        {can("device.manage") && device.connection_type === "wireless_adb" && device.host && <WirelessPortUpdate id={device.id} host={device.host} port={device.port} />}
                                         <button
                                             className="button"
                                             disabled={disabled}

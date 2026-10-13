@@ -1,5 +1,8 @@
 """Deterministic, deliberately varied demo transports; no device is contacted."""
 
+import asyncio
+from pathlib import Path
+
 from android_fleet.collectors.cpu import FREQUENCY_SCRIPT
 from android_fleet.collectors.thermal import THERMAL_SCRIPT
 from android_fleet.devices.models import DeviceState
@@ -33,6 +36,35 @@ class FakeAdbClient:
         self.disconnection_calls: list[str] = []
         self.cpu_samples: dict[str, int] = {}
         self.calls: list[tuple[str, tuple[str, ...]]] = []
+
+    async def terminal(self, serial: str, cols: int, rows: int) -> "FakeTerminal":
+        if self.devices.get(serial) != DeviceState.ONLINE:
+            raise RuntimeError("Device offline")
+        self.calls.append((serial, ("terminal",)))
+        return FakeTerminal()
+
+    async def pair(self, address: str, code: str, *, timeout: float = 15) -> CommandResult:
+        import re
+
+        if not re.fullmatch(r"[0-9]{6}", code):
+            raise ValueError("Invalid pairing code")
+        return CommandResult(stdout="paired", exit_code=0)
+
+    async def push(self, serial: str, local: Path, remote: str) -> None:
+        self.calls.append((serial, ("push", str(local), remote)))
+
+    async def forward(self, serial: str, socket: str) -> int:
+        raise RuntimeError("Live video unavailable on fake devices")
+
+    async def list_forwards(self) -> tuple[tuple[str, str, str], ...]:
+        return ()
+
+    async def remove_forward(self, serial: str, port: int, *, socket: str | None = None) -> None:
+        self.calls.append((serial, ("forward", "--remove", f"tcp:{port}")))
+
+    async def start_shell(self, serial: str, argv: tuple[str, ...]) -> "FakeAdbProcess":
+        self.calls.append((serial, argv))
+        return FakeAdbProcess()
 
     async def list_devices(self) -> dict[str, DeviceState]:
         return dict(self.devices)
@@ -156,3 +188,28 @@ class FakeAdbClient:
 
     async def mdns_services(self) -> tuple[MdnsService, ...]:
         return self.services
+
+
+class FakeAdbProcess:
+    async def close(self) -> None:
+        pass
+
+
+class FakeTerminal:
+    def __init__(self) -> None:
+        self.queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=16)
+        self.queue.put_nowait(b"\x1b[32mFake Android shell\x1b[0m\r\n$ ")
+        self.closed = False
+        self.size = (80, 24)
+
+    async def read(self) -> bytes:
+        return await self.queue.get()
+
+    async def write(self, data: bytes) -> None:
+        await self.queue.put(data)
+
+    async def resize(self, cols: int, rows: int) -> None:
+        self.size = (cols, rows)
+
+    async def close(self) -> None:
+        self.closed = True

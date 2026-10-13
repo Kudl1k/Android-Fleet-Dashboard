@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-11",
+  "status": "published_to_local_registry",
+  "registry_published": true,
+  "deployed_to_existing_stack": false,
+  "images": {
+    "mac.lab:5000/android-fleet/backend:m7-20261011": {
+      "local_image_id": "sha256:3f223aa1c1f18544c13ee450e9ab9da5ead8bb805bbdee3e09810a92678cc643",
+      "registry_digest": "sha256:3f223aa1c1f18544c13ee450e9ab9da5ead8bb805bbdee3e09810a92678cc643"
+    },
+    "mac.lab:5000/android-fleet/backend:m7-20261011.1": {
+      "local_image_id": "sha256:fa7c273956eabd1c67a4690c54d256d92f1eee8caf31eb169426ccccf2610c8b",
+      "registry_digest": "sha256:fa7c273956eabd1c67a4690c54d256d92f1eee8caf31eb169426ccccf2610c8b"
+    },
+    "mac.lab:5000/android-fleet/backend:m7-20261011.2": {
+      "local_image_id": "sha256:dd86d66fdd26333404abc3b12dd20a0b95f797547bbc0ec616f6eb2179b066a0",
+      "registry_digest": "sha256:dd86d66fdd26333404abc3b12dd20a0b95f797547bbc0ec616f6eb2179b066a0"
+    },
+    "mac.lab:5000/android-fleet/backend:latest": {
+      "local_image_id": "sha256:dd86d66fdd26333404abc3b12dd20a0b95f797547bbc0ec616f6eb2179b066a0",
+      "registry_digest": "sha256:dd86d66fdd26333404abc3b12dd20a0b95f797547bbc0ec616f6eb2179b066a0"
+    },
+    "mac.lab:5000/android-fleet/frontend:m7-20261011": {
+      "local_image_id": "sha256:9e8c3704123c15801d16d02bd085150996e123c9c2db3e7b0572f33f369799f9",
+      "registry_digest": "sha256:9e8c3704123c15801d16d02bd085150996e123c9c2db3e7b0572f33f369799f9"
+    },
+    "mac.lab:5000/android-fleet/frontend:m7-20261011.1": {
+      "local_image_id": "sha256:7d52744e8398c80b0a92c730689966b8ebb31249c756c05bc4550b38f4b1a14a",
+      "registry_digest": "sha256:7d52744e8398c80b0a92c730689966b8ebb31249c756c05bc4550b38f4b1a14a"
+    },
+    "mac.lab:5000/android-fleet/frontend:m7-20261011.2": {
+      "local_image_id": "sha256:139e7eb894eaf89662bc0036055b4592720756be104cbcf016d4c9c5d0dcbc76",
+      "registry_digest": "sha256:139e7eb894eaf89662bc0036055b4592720756be104cbcf016d4c9c5d0dcbc76"
+    },
+    "mac.lab:5000/android-fleet/frontend:latest": {
+      "local_image_id": "sha256:139e7eb894eaf89662bc0036055b4592720756be104cbcf016d4c9c5d0dcbc76",
+      "registry_digest": "sha256:139e7eb894eaf89662bc0036055b4592720756be104cbcf016d4c9c5d0dcbc76"
+    }
+  }
+}

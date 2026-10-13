@@ -83,7 +83,7 @@ filename; images never have public static URLs and expire after an hour by defau
 
 See [device control](DEVICE_CONTROL.md) for action permissions, result shapes,
 unsupported capabilities and execution bounds. Arbitrary shell/terminal, logcat,
-file transfer and screen input streams remain deferred to scoped M5 work.
+and file transfer remain deferred. M5 adds the scoped screen transport described below.
 
 ## Metric queries
 
@@ -120,3 +120,46 @@ List queries accept `state=pending|firing|acknowledged|resolved`,
 `items`, `total`, `limit`, `offset`; histories are paginated rather than returned
 unbounded. Mutation guards match device controls. Read routes enforce `alerts.read`; optional anonymous viewer access retains
 the loopback deployment compatibility mode.
+
+## M5 live screen
+
+| Method | Route | Result |
+| --- | --- | --- |
+| POST | `/api/v1/devices/{device_id}/screen/sessions` | Create view-only session; 201; `screen:view` |
+| GET | `/api/v1/screen/sessions` | Current actor's scoped sessions |
+| GET | `/api/v1/screen/sessions/{sid}` | Owner's session details |
+| GET | `/api/v1/screen/sessions/{sid}/statistics` | Bytes, drops and startup seconds |
+| DELETE | `/api/v1/screen/sessions/{sid}` | Owner stops session |
+| POST | `/api/v1/screen/sessions/{sid}/terminate` | Explicit termination; `screen:session:terminate` (administrator for other owners) |
+| POST / DELETE | `/api/v1/screen/sessions/{sid}/control` | Acquire exclusive control / release it |
+| POST | `/api/v1/screen/sessions/{sid}/ticket` | Single-use stream ticket, expires in 30 seconds |
+| WebSocket | `/api/v1/screen/sessions/{sid}/stream` | Authenticated session-bound video and input |
+
+Creation accepts strict JSON `{"max_size":1280,"max_fps":30,"bitrate":4000000,"codec":"h264"}`. Bounds are 320–2560 pixels, 1–60 FPS and 100000–12000000 bit/s. Unknown fields and codecs are rejected. Creation is asynchronous: 201 does not prove the device encoder started. Offline devices return 409 and resource saturation 429. Details contain ID, device ID, owner, creation/activity Unix timestamps, state, requested capabilities, configuration, control ownership, dimensions, statistics and termination reason. States are `starting`, `streaming`, `reconnecting`, `stopping`, `stopped`, `failed`, `timed_out`. Terminal records expire from memory after five minutes; this is not durable history.
+
+Use a bearer-authenticated ticket request, then an allowed-origin WebSocket and first text message `{"ticket":"VALUE"}` within five seconds. Never put a bearer or ticket in the URL. One socket attaches to one session. Server text messages include metadata, status and errors; binary messages contain framed H.264 access units as documented in [architecture](M5_ARCHITECTURE.md). Send `{"type":"ping"}` every ten seconds to keep the session active. Disconnect terminates the session and releases control.
+
+Control acquisition requires an attached streaming session, owner identity, device scope and `screen:control`; competing controllers return 409. Input remains rejected until acquisition. Text JSON is limited to 4096 characters, with 120 control events per second per session. Strict event variants are `pointer` (action, x/y, width/height, pressure/buttons), `key` (allowlisted Android keycode, down/up, repeat/meta), `text` (1–300 characters), and `nav` (back/home/recent/wake/volume_up/volume_down). Pointer dimensions must match the current display. No arbitrary Android keycodes or shell commands are accepted. See generated OpenAPI for exact schema bounds; WebSocket event schemas follow `screen/models.py`.
+
+## M7 terminal, SSH and pairing API
+
+`POST /api/v1/terminal/sessions` accepts connection_type (adb/ssh), registered device_id
+or saved profile_id and cols/rows. GET list/detail returns owner metadata/history; DELETE
+closes an owned session; POST /{id}/terminate requires terminal:session:terminate.
+POST /{id}/ticket issues a single-use ticket; `/api/v1/terminal/sessions/{id}/stream`
+authenticates via fleet-terminal.v1 and ticket.<token> WebSocket subprotocols before accept.
+Messages are version:1 JSON with input/output/resize/status/error/close/heartbeat types.
+See [architecture](M7_ARCHITECTURE.md) for exact schemas and bounds.
+
+`/api/v1/ssh/profiles`: GET list, POST create, PUT /{id} replace, DELETE /{id};
+GET /{id}/host-key candidate fingerprint, POST same path {fingerprint} approval,
+POST /{id}/test short connection. Manage routes require terminal:profile:manage.
+Secrets are accepted only on writes and never returned.
+
+Administrator pairing routes: POST /api/v1/pairing/pair {host,port,code};
+POST /api/v1/pairing/connect {host,port}; POST /api/v1/pairing/register {host,port,name};
+POST /api/v1/devices/{id}/wireless-port {host,port}. Pairing and connection ports are
+separate; verification is actor-bound and expires. GET /api/v1/pairing/allowed-networks lists
+approved private IP/CIDR entries; POST with {network} approves one and DELETE with {network}
+revokes one. These settings routes require security.manage and changes are audited. See
+[configuration](M7_SSH_CONFIGURATION.md).

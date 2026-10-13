@@ -1,0 +1,6 @@
+{
+  "status": "PASS",
+  "backend_image_matches_final_sources": true,
+  "verified_file": "backend/src/android_fleet/adb/subprocess.py",
+  "sha256": "f5ee790abefc9cee8c750ab5a0df1b1f8da93d58b1bbf7850c55cb6d602c77e2"
+}

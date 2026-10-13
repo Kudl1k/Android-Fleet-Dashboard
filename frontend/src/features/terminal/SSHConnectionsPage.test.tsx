@@ -1,0 +1,13 @@
+import {fireEvent,render,screen,waitFor,cleanup} from "@testing-library/react";
+import {QueryClient,QueryClientProvider} from "@tanstack/react-query";
+import {afterEach,beforeEach,expect,it,vi} from "vitest";
+import SSHConnectionsPage from "./SSHConnectionsPage";
+import {request} from "../../lib/api";
+const auth={can:()=>true};
+vi.mock("../../lib/auth",()=>({useAuth:()=>auth}));vi.mock("../../lib/api",()=>({request:vi.fn()}));vi.mock("./TerminalPanel",()=>({default:()=>null}));
+const profile={id:"p1",name:"Lab SSH",host:"192.168.1.8",port:8022,username:"android",auth_method:"key",enabled:true,allowed_identities:["operator"],fingerprint:null};
+afterEach(cleanup);beforeEach(()=>{vi.resetAllMocks();auth.can=()=>true;vi.mocked(request).mockImplementation(async path=>path.endsWith("/host-key")?{fingerprint:"SHA256:verified"}:path.endsWith("/test")?{status:"connected"}:[profile]);});
+function show(){render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><SSHConnectionsPage/></QueryClientProvider>);}
+it("requires explicit matching fingerprint before approval",async()=>{show();fireEvent.click(await screen.findByText("Inspect host key"));await screen.findByText("SHA256:verified");expect(screen.getByText("Approve fingerprint")).toBeDisabled();fireEvent.change(screen.getByLabelText("Type the complete fingerprint to confirm"),{target:{value:"SHA256:verified"}});fireEvent.click(screen.getByText("Approve fingerprint"));await waitFor(()=>expect(request).toHaveBeenCalledWith("/api/v1/ssh/profiles/p1/host-key",{method:"POST",body:JSON.stringify({fingerprint:"SHA256:verified"})}));});
+it("filters profiles and reports connection test status",async()=>{show();await screen.findByText("Lab SSH");fireEvent.click(screen.getByText("Test connectivity"));await screen.findByText("Lab SSH: connection succeeded");fireEvent.change(screen.getByLabelText("Search connections"),{target:{value:"unrelated"}});expect(screen.queryByText("Lab SSH")).not.toBeInTheDocument();});
+it("updates profiles using opaque credential replacement and explicit actor ACL",async()=>{show();fireEvent.click(await screen.findByText("Edit"));fireEvent.change(screen.getByLabelText("Allowed actor identities (comma separated)"),{target:{value:"operator, second"}});fireEvent.click(screen.getByText("Save profile"));await waitFor(()=>expect(request).toHaveBeenCalledWith("/api/v1/ssh/profiles/p1",expect.objectContaining({method:"PUT"})));const call=vi.mocked(request).mock.calls.find(c=>c[1]?.method==="PUT")!;const body=JSON.parse(call[1]!.body as string);expect(body.allowed_identities).toEqual(["operator","second"]);expect(body.credential).toBeUndefined();expect(body.id).toBeUndefined();expect(body.fingerprint).toBeUndefined();});

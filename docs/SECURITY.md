@@ -42,7 +42,7 @@ Audit errors use fixed machine codes and operation errors are sanitized.
 
 ## Remaining hardening
 
-Roles currently apply fleet-wide; per-device scope, MFA, token expiry, live revocation,
+Pre-existing monitoring and M4 roles apply fleet-wide; M5 supports optional device scope for screen actions only. Fleet-wide device scope, MFA, token expiry, live revocation,
 external identity integration, TLS automation, immutable external audit archives,
 request rate limiting and dependency/image digest locking remain future hardening.
 Host administrators can alter application code/databases despite application audit
@@ -74,3 +74,27 @@ Docker-network access for existing scraping. Before remote access, exclude monit
 routes/ports from general ingress or use trusted authenticated infrastructure and a
 separate scrape credential design. Securing `/metrics` alone would not secure Prometheus
 queries. Runtime monitoring must be verified before changing scrape credentials.
+
+## M5 streaming safeguards
+
+Live screen routes always require authenticated `screen:view`; anonymous compatibility access cannot start streams. A control request and every input event enforce `screen:control`, owner identity and exclusive device ownership. Optional credential `device_ids` scope applies to screen actions only. Session termination of another actor is an explicit administrator path. Stream content is not stored or audited.
+
+WebSocket connections require an exact trusted Origin and a session-bound ticket in the first message within five seconds. Default trusted origins are `http://127.0.0.1:8088` and `http://localhost:8088`; local Vite development requires explicitly adding its origin. Tickets expire after 30 seconds and are consumed once. No token appears in the URL. Handshake/input sizes, strict payload schemas, 120-event/s control limits, bounded packet queues and send deadlines constrain resource abuse. Protocol-level transport limits also apply; this is not a general HTTP request-rate limiter.
+
+The official scrcpy server runs transiently through authenticated ADB shell privileges without APK installation. Unique session transports isolate concurrent sessions. Cleanup closes sockets, removes owned forwarding and targets recorded session processes/artifacts; restart recovery does not kill unrelated scrcpy sessions or remove all ADB forwarding. A device that is unreachable can prevent immediate remote cleanup, which increments cleanup failure metrics. The backend does not resume control after restart or reconnection. Keep the existing local-only boundary; this milestone adds neither public ports nor production remote-access security.
+
+## M7 privileged terminals and pairing
+
+Interactive ADB defaults disabled; administrator permission terminal:adb grants broad
+Android shell-user access without su. SSH requires terminal:ssh plus explicit profile
+ACL/device scope and an exact administrator destination allowlist. Credentials are Fernet
+encrypted with a separately managed key; host fingerprints must be confirmed before use.
+WebSocket tickets are one-use, owner/session-bound and validated before acceptance; strict
+Origin, bounded frames/queues/rate/time limits and cleanup apply. Keystrokes and output are
+never audited or stored. Pairing codes travel through ADB stdin, are never persisted or
+returned, and are cleared from browser state. Pairing uses administrator-approved private
+IPs or bounded private CIDRs managed in administrator-only app settings and rate limits;
+network approvals persist in `pairing.sqlite3` and changes are audited. Connect and
+enrollment are distinct. See
+[M7 guide](M7_SSH_CONFIGURATION.md)
+for backup/rotation, limitations and private HTTPS requirements.

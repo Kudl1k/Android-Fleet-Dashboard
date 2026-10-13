@@ -19,6 +19,7 @@ from starlette.routing import Match
 
 from android_fleet.adb.base import AdbClient
 from android_fleet.adb.fake import FakeAdbClient
+from android_fleet.adb.pairing import PairingService
 from android_fleet.adb.subprocess import SubprocessAdbClient
 from android_fleet.alerts.api import router as alert_router
 from android_fleet.alerts.engine import AlertEngine
@@ -46,7 +47,15 @@ from android_fleet.devices.registry_models import DeviceRegistration, Registered
 from android_fleet.devices.service import DeviceUnavailable, FleetService
 from android_fleet.metrics.exporter import render_metrics
 from android_fleet.metrics.history import HistoryError, InvalidHistoryQuery, MetricHistoryStore
+from android_fleet.screen.api import router as screen_router
+from android_fleet.screen.manager import ScreenManager
+from android_fleet.screen.metrics import render_screen_metrics
 from android_fleet.security import SecurityService
+from android_fleet.terminal.api import router as terminal_router
+from android_fleet.terminal.manager import TerminalManager
+from android_fleet.terminal.metrics import render as render_terminal_metrics
+from android_fleet.terminal.profiles import ProfileService
+from android_fleet.terminal.ssh import SSHGateway
 
 
 def create_app(
@@ -111,6 +120,29 @@ def create_app(
         Path(transient.name) if transient else Path(configuration.registry_path).parent
     )
     security = SecurityService(configuration, state_directory / "security.sqlite3")
+    screens = ScreenManager(client, service, security, configuration)
+    profiles = ProfileService(
+        state_directory / "ssh.sqlite3",
+        configuration.ssh_encryption_key.get_secret_value()
+        if configuration.ssh_encryption_key
+        else None,
+        configuration.ssh_destinations,
+    )
+    gateway = SSHGateway(profiles)
+    terminals = TerminalManager(
+        configuration.model_copy(
+            update={
+                "terminal_path": configuration.terminal_path
+                or state_directory / "terminals.sqlite3"
+            }
+        ),
+        service,
+        security,
+        gateway,
+    )
+    pairing = PairingService(
+        client, service, security, configuration, state_directory / "pairing.sqlite3"
+    )
     operations = Manager(
         client,
         service,
@@ -135,6 +167,9 @@ def create_app(
         security_worker: asyncio.Task[None] | None = None
         try:
             await security.initialize()
+            await pairing.initialize()
+            await profiles.initialize()
+            await terminals.initialize()
 
             async def maintain_security() -> None:
                 while True:
@@ -147,6 +182,7 @@ def create_app(
             # Initial batch keeps existing M0/M1 startup semantics; later sampling
             # has its own worker and never holds the connection orchestration lock.
             await service.poll()
+            await screens.start()
             await operations.initialize()
             await operations.start()
             await alert_engine.initialize()
@@ -202,6 +238,8 @@ def create_app(
             finally:
                 try:
                     await operations.close()
+                    await terminals.close()
+                    await screens.close()
                     await alert_store.close()
                     await metric_history.close()
                 finally:
@@ -217,6 +255,10 @@ def create_app(
     application.state.alerts = alert_engine
     application.state.security = security
     application.state.operations = operations
+    application.state.screens = screens
+    application.state.terminals = terminals
+    application.state.ssh_profiles = profiles
+    application.state.pairing = pairing
 
     def error_response(status: int, code: str, message: str) -> JSONResponse:
         return JSONResponse({"error": {"code": code, "message": message}}, status_code=status)
@@ -247,6 +289,53 @@ def create_app(
 
     @application.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, error: RequestValidationError) -> JSONResponse:
+        path = request.url.path
+        if (
+            path.startswith("/api/v1/pairing/")
+            or re.fullmatch(r"/api/v1/devices/[^/]+/wireless-port", path)
+            or path.startswith("/api/v1/terminal/")
+            or path.startswith("/api/v1/ssh/")
+        ):
+            permission = "security.manage"
+            if path.startswith("/api/v1/ssh/"):
+                permission = "terminal:profile:manage"
+            elif path.startswith("/api/v1/terminal/"):
+                body = error.body if isinstance(error.body, dict) else {}
+                connection_type = body.get("connection_type")
+                permission = (
+                    "terminal:" + connection_type
+                    if isinstance(connection_type, str) and connection_type in {"adb", "ssh"}
+                    else "terminal:view"
+                )
+            try:
+                actor = await security.authorize(request, permission)
+            except HTTPException as denial:
+                return error_response(denial.status_code, "control_denied", "Permission denied")
+            await security.audit(
+                actor,
+                request.path_params.get("device_id"),
+                permission,
+                request.state.request_id,
+                "allowed",
+                "rejected",
+                error="invalid_request",
+            )
+        if request.url.path.startswith("/api/v1/screen/sessions") or re.fullmatch(
+            r"/api/v1/devices/[^/]+/screen/sessions", request.url.path
+        ):
+            try:
+                actor = await security.authorize(request, "screen:view")
+            except HTTPException as denial:
+                return error_response(denial.status_code, "screen_denied", "Permission denied")
+            await security.audit(
+                actor,
+                request.path_params.get("device_id"),
+                "screen.session.request",
+                request.state.request_id,
+                "allowed",
+                "rejected",
+                error="invalid_request",
+            )
         if request.method == "POST" and request.url.path.endswith("/operations"):
             body = error.body if isinstance(error.body, dict) else {}
             action = body.get("action")
@@ -271,7 +360,14 @@ def create_app(
                 "rejected",
                 error="invalid_request",
             )
-        return error_response(422, "invalid_request", "Request fields are invalid")
+        issues: list[str] = []
+        for issue in error.errors():
+            location = ".".join(str(part) for part in issue.get("loc", ()) if part != "body")
+            message = issue.get("msg")
+            if location and isinstance(message, str):
+                issues.append(f"{location}: {message.removeprefix('Value error, ')}")
+        detail = f" ({'; '.join(issues)})" if issues else ""
+        return error_response(422, "invalid_request", f"Request fields are invalid{detail}")
 
     @application.exception_handler(RegistryError)
     async def registry_unavailable(request: Request, error: RegistryError) -> JSONResponse:
@@ -303,6 +399,10 @@ def create_app(
     application.include_router(alert_router(alert_engine, control))
     application.include_router(security.router())
     application.include_router(control_router(operations, security))
+    application.include_router(screen_router(screens, security))
+    application.include_router(terminal_router(terminals, security))
+    application.include_router(profiles.router(security))
+    application.include_router(pairing.router())
 
     @application.middleware("http")
     async def protected_api(request: Request, call_next: RequestResponseEndpoint) -> Response:
@@ -315,6 +415,13 @@ def create_app(
             or path.startswith("/api/v1/auth/")
             or path == "/api/v1/operations"
             or path.startswith("/api/v1/operations/")
+            or path == "/api/v1/screen/sessions"
+            or path.startswith("/api/v1/screen/sessions/")
+            or path.startswith("/api/v1/terminal/")
+            or path.startswith("/api/v1/ssh/")
+            or path.startswith("/api/v1/pairing/")
+            or re.fullmatch(r"/api/v1/devices/[^/]+/wireless-port", path)
+            or re.fullmatch(r"/api/v1/devices/[^/]+/screen/sessions", path)
             or re.fullmatch(r"/api/v1/devices/[^/]+/(?:operations|apk)", path)
         ):
             return await call_next(request)
@@ -540,7 +647,9 @@ def create_app(
                 "android_alert_evaluation_duration_seconds "
                 f"{alert_engine.last_evaluation_duration}\n"
                 f"android_alert_last_evaluation_timestamp_seconds {last_timestamp}\n"
-            ).encode(),
+            ).encode()
+            + render_screen_metrics(screens.metrics())
+            + render_terminal_metrics(terminals).encode(),
             media_type="text/plain; version=0.0.4; charset=utf-8",
         )
 

@@ -1,34 +1,38 @@
 # M4.5 frontend and browser acceptance — 2026-10-09
 
-## Executed automated checks
+**PASS** — actual Chromium runtime acceptance supersedes the historical sandbox
+launch failures. Chromium **156.0.8078.4** ran against deployed localhost M4 services,
+at desktop **1440×1000** and mobile **390×844** with touch/mobile emulation for the
+main mobile session. This is Chromium emulation, not physical mobile-browser testing.
 
-PASS — `cd frontend && npm test`: 45 tests across 9 test files.
+The previously completed 45 tests in nine files, lint, typecheck and production build
+were not unnecessarily rerun. Docker image construction reran the TypeScript/Vite build.
+Existing stale credential/cache/preview regressions remain separately recorded unit
+coverage. No frontend implementation change was required by this continuation.
 
-PASS — `npm run lint`, `npm run typecheck`, `npm run build` (production Vite build).
+| Scenario | Desktop / mobile result |
+| --- | --- |
+| Sign-in and fleet overview | PASS — real Samsung shown, five registrations; no horizontal viewport overflow. Fleet screenshots visually inspected for mobile layout. |
+| Device detail and Device Control | PASS — live detail and controls rendered. |
+| Installed applications search | PASS — actual previous `apps.list` result filters `com.android`; nonexistent search gives zero package rows. |
+| Protected screenshot preview | PASS — actual authenticated PNG decodes to natural width 1080, preview closes. No preview pixels saved in browser screenshots. |
+| Confirmation dialog | PASS — administrator opens normal reboot confirmation then cancels; Confirm action never clicked, no reboot submitted. |
+| Operation/audit history | PASS — real operation and audit filters show successful screenshot entries. |
+| Management/alerts navigation | PASS — deployed pages render; no browser device registration/removal or alert mutation performed. |
+| Viewer restrictions | PASS — capture disabled, audit navigation absent. |
+| Operator restrictions | PASS — capture enabled; reboot and APK upload disabled. |
+| Offline controls | PASS — existing `pixel-offline` registration shows unavailable controls; inspect disabled and layout has no viewport overflow. |
+| Loading and error states | PASS — real operation response delayed one second by pass-through browser interception exposes loading state; actual missing-device 404 renders error. No fabricated backend response. |
+| Credential persistence | PASS — tokens absent from localStorage/sessionStorage; page reload clears identity. |
+| Revoked active credential | PASS — remove temporary backend credentials, navigate active browser to fleet, actual HTTP 401 clears identity and privileged navigation. |
+| JavaScript/network diagnostics | PASS — zero JavaScript page errors; expected 401 for unauthenticated/revoked sessions and 503 for offline telemetry. No unexpected network failures. |
 
-New regression tests verify expired credential invalidation, rejection of screenshots completing after a credential change, isolation of replacement credentials from earlier request failures, and preview removal/object URL revocation when credentials change. Existing component tests cover viewer/operator restrictions, administrator reboot confirmation, force-stop confirmation, offline controls, application search, history permission restrictions and audit pagination. These are automated jsdom/component checks, not browser runtime acceptance.
+Initial harness retries fixed a hidden filter-option selector and use of full navigation
+(which correctly clears in-memory credentials). They were not application regressions;
+only the final successful scenarios are counted as acceptance. Loading delay affects
+request timing only; protected data and screenshot checks used actual deployed responses.
 
-## Security and UX fixes
-
-A 401 for the active in-memory credential now clears authentication and cached data. Successful responses from an earlier credential are discarded after a credential change. Screenshot requests use the same invalidation and response isolation. Device-control state resets when the identity token or selected device changes, removing previous screenshot previews and pending confirmations; object URLs are revoked on unmount. Sign-in copy now explicitly covers viewer/operator/administrator access to protected fleet data. Credentials remain in memory only.
-
-## Browser attempts
-
-Executed from `/private/tmp/adb-m3-browser` using the installed Playwright package:
-
-```sh
-node -e 'const {chromium}=require("playwright"); chromium.launch({headless:true}).then(async b=>{console.log("Chromium launch PASS");await b.close()}).catch(e=>{console.error(e.message);process.exit(1)})'
-node -e 'const {chromium}=require("playwright"); chromium.launch({channel:"chromium",headless:true}).then(async b=>{console.log("Chromium launch PASS");await b.close()}).catch(e=>{console.error(e.message);process.exit(1)})'
-```
-
-BLOCKED — Chromium headless shell exited with SIGTRAP. Browser log: `bootstrap_check_in org.chromium.Chromium.MachPortRendezvousServer.<pid>: Permission denied (1100)`.
-
-BLOCKED — supported full Chromium channel exited with SIGABRT before a session opened. Playwright reported `Target page, context or browser has been closed`; cleanup `kill` returned EPERM.
-
-No browser session successfully opened. No desktop/mobile screenshots were taken. No API requests, hardware actions or mock-browser acceptance were substituted for live acceptance. Sandbox approval is disabled for this environment, so permission escalation was unavailable.
-
-## Required live scenarios
-
-BLOCKED — desktop and mobile fleet overview, detail, Device Control, installed applications, protected screenshot capture, operation/audit histories, role-aware actions, expired-session behavior, confirmation dialogs, loading/error/offline states, console errors and failed-request inspection. Browser launch restrictions prevent all of these runtime checks; deployed localhost reachability is separately tracked in the lead validation report.
-
-M4.5 browser acceptance remains incomplete. Run these scenarios against the deployed M4 images in an environment permitting Chromium bootstrap/IPC and localhost connections before M5.
+Local evidence is private under `/private/tmp/m45-runtime`: `browser-evidence.json`,
+`browser-extra.json`, desktop/mobile fleet and offline screenshots. No tokens or
+protected screenshot pixels were published or added to Git. Acceptance tokens were
+revoked and the normal backend configuration restored.

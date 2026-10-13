@@ -1,0 +1,191 @@
+[
+  {
+    "Id": "cb3f62f2395ab7a8ee4d55eba8b97442c7b9c209cce71fa784fa6b4af52c93d9",
+    "Name": "/adb-dashboard-android-manager-1",
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "adb-dashboard_adb-keys",
+        "Source": "/var/lib/docker/volumes/adb-dashboard_adb-keys/_data",
+        "Destination": "/home/fleet/.android",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "adb-dashboard_device-registry",
+        "Source": "/var/lib/docker/volumes/adb-dashboard_device-registry/_data",
+        "Destination": "/var/lib/android-fleet",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "image": "adb-dashboard-android-manager",
+    "labels": {
+      "com.docker.compose.config-hash": "378ce6269b59d6b78f05377073ea74bb451e0884453fc87615da7d12b465eae7",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "",
+      "com.docker.compose.image": "sha256:c326ee19b3774d4263bfb9bd6bac0e72a314b321a73f8d832315f98d899db394",
+      "com.docker.compose.image.builder": "classic",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "adb-dashboard",
+      "com.docker.compose.project.config_files": "/Users/homelab/Development/adb-dashboard/docker-compose.yml",
+      "com.docker.compose.project.working_dir": "/Users/homelab/Development/adb-dashboard",
+      "com.docker.compose.replace": "android-manager-1",
+      "com.docker.compose.service": "android-manager",
+      "com.docker.compose.version": "5.5.0"
+    },
+    "ports": {
+      "8000/tcp": [
+        {
+          "HostIp": "127.0.0.1",
+          "HostPort": "9000"
+        }
+      ]
+    }
+  },
+  {
+    "Id": "467ed107b8e95bf954a02df75a1ff4ca1b223c2c4cba5daa90f45668da0d11b0",
+    "Name": "/adb-dashboard-frontend-1",
+    "Mounts": [],
+    "image": "adb-dashboard-frontend",
+    "labels": {
+      "com.docker.compose.config-hash": "b8f8bb0450cff85055cfda202f443cfec506c1c95a8c5fe21c4465d720411955",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "android-manager:service_healthy:false",
+      "com.docker.compose.image": "sha256:15b207793772f62e1072d5e88a7e4258b33d4706bc81ae803ab5a19730848b2f",
+      "com.docker.compose.image.builder": "classic",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "adb-dashboard",
+      "com.docker.compose.project.config_files": "/Users/homelab/Development/adb-dashboard/docker-compose.yml",
+      "com.docker.compose.project.working_dir": "/Users/homelab/Development/adb-dashboard",
+      "com.docker.compose.replace": "frontend-1",
+      "com.docker.compose.service": "frontend",
+      "com.docker.compose.version": "5.5.0",
+      "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>",
+      "org.opencontainers.image.created": "2026-02-23T01:48:31.459Z",
+      "org.opencontainers.image.description": "Unprivileged NGINX Dockerfiles",
+      "org.opencontainers.image.licenses": "Apache-2.0",
+      "org.opencontainers.image.revision": "61141700fbe3bb03ee7379fd0a5cba5c9c5fc885",
+      "org.opencontainers.image.source": "https://github.com/nginx/docker-nginx-unprivileged",
+      "org.opencontainers.image.title": "docker-nginx-unprivileged",
+      "org.opencontainers.image.url": "https://github.com/nginx/docker-nginx-unprivileged",
+      "org.opencontainers.image.version": "1.28.2-alpine"
+    },
+    "ports": {
+      "8080/tcp": [
+        {
+          "HostIp": "127.0.0.1",
+          "HostPort": "8088"
+        }
+      ]
+    }
+  },
+  {
+    "Id": "8030b4ee5aae3350320871608636110908a8e91091274616e5c3d9cb802a5970",
+    "Name": "/adb-dashboard-prometheus-1",
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/Users/homelab/Development/adb-dashboard/monitoring/prometheus/prometheus.yml",
+        "Destination": "/etc/prometheus/prometheus.yml",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "adb-dashboard_prometheus-data",
+        "Source": "/var/lib/docker/volumes/adb-dashboard_prometheus-data/_data",
+        "Destination": "/prometheus",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "image": "prom/prometheus:v3.2.1",
+    "labels": {
+      "com.docker.compose.config-hash": "de77680b8fc9f46b26430194dd8147dacbddc8c53e52254d81e745dd96ccfd69",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "",
+      "com.docker.compose.image": "sha256:641f5faf625e3c667e2fb75b89a8a1dbc59a564f982f725fffb314f9293ab150",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "adb-dashboard",
+      "com.docker.compose.project.config_files": "/Users/homelab/Development/adb-dashboard/docker-compose.yml",
+      "com.docker.compose.project.working_dir": "/Users/homelab/Development/adb-dashboard",
+      "com.docker.compose.service": "prometheus",
+      "com.docker.compose.version": "5.5.0",
+      "maintainer": "The Prometheus Authors <prometheus-developers@googlegroups.com>",
+      "org.opencontainers.image.source": "https://github.com/prometheus/prometheus"
+    },
+    "ports": {
+      "9090/tcp": [
+        {
+          "HostIp": "127.0.0.1",
+          "HostPort": "9090"
+        }
+      ]
+    }
+  },
+  {
+    "Id": "0ca8c5ae01443d6cccfd1caf05c793b86f76f7be3f6ce17f7867ae7594870c98",
+    "Name": "/adb-dashboard-grafana-1",
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/Users/homelab/Development/adb-dashboard/monitoring/grafana/provisioning",
+        "Destination": "/etc/grafana/provisioning",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/Users/homelab/Development/adb-dashboard/monitoring/grafana/dashboards",
+        "Destination": "/var/lib/grafana/dashboards",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "adb-dashboard_grafana-data",
+        "Source": "/var/lib/docker/volumes/adb-dashboard_grafana-data/_data",
+        "Destination": "/var/lib/grafana",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "image": "grafana/grafana:11.6.0",
+    "labels": {
+      "com.docker.compose.config-hash": "3a8c960bfe213d5b1d2f8b25db27b266edae9f984d06c05276a382065869e9d8",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "",
+      "com.docker.compose.image": "sha256:c5bb8837eb70910907d8df3a11d0c489bd9e0f761cb67261e8d7d6af0724ddf3",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "adb-dashboard",
+      "com.docker.compose.project.config_files": "/Users/homelab/Development/adb-dashboard/docker-compose.yml",
+      "com.docker.compose.project.working_dir": "/Users/homelab/Development/adb-dashboard",
+      "com.docker.compose.replace": "grafana-1",
+      "com.docker.compose.service": "grafana",
+      "com.docker.compose.version": "5.5.0",
+      "maintainer": "Grafana Labs <hello@grafana.com>",
+      "org.opencontainers.image.source": "https://github.com/grafana/grafana"
+    },
+    "ports": {
+      "3000/tcp": [
+        {
+          "HostIp": "127.0.0.1",
+          "HostPort": "1900"
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "backend:2ba42d3": {
+    "digest": "sha256:f96f8665ca686db4f1a89ee350601f0ad1114d4da075da1746eb5795ca7aef46",
+    "architecture": "linux/arm64",
+    "created": "2026-10-10T19:50:39.985407791+02:00",
+    "verified": "2026-10-10T18:03:47.522825+00:00"
+  },
+  "backend:latest": {
+    "digest": "sha256:f96f8665ca686db4f1a89ee350601f0ad1114d4da075da1746eb5795ca7aef46",
+    "architecture": "linux/arm64",
+    "created": "2026-10-10T19:50:39.985407791+02:00",
+    "verified": "2026-10-10T18:03:47.534277+00:00"
+  },
+  "frontend:2ba42d3": {
+    "digest": "sha256:5ac714b30cc89002342818c2da0380f30c9bac0b058c6a7ef1afc1db5bff8c5c",
+    "architecture": "linux/arm64",
+    "created": "2026-10-10T19:44:08.411090499+02:00",
+    "verified": "2026-10-10T18:03:47.545853+00:00"
+  },
+  "frontend:latest": {
+    "digest": "sha256:5ac714b30cc89002342818c2da0380f30c9bac0b058c6a7ef1afc1db5bff8c5c",
+    "architecture": "linux/arm64",
+    "created": "2026-10-10T19:44:08.411090499+02:00",
+    "verified": "2026-10-10T18:03:47.555596+00:00"
+  }
+}

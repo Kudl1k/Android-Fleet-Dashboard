@@ -281,3 +281,104 @@ async def test_oversized_output_is_bounded_and_reaped(stream: str) -> None:
     )
     with pytest.raises(RuntimeError, match="output limit"):
         await asyncio.wait_for(client._run(["-c", script], 5), 2)
+
+
+async def test_forward_inspection_is_bounded_and_rejects_unknown_output() -> None:
+    from android_fleet.execution.models import CommandResult
+
+    client = SubprocessAdbClient()
+    with patch.object(client, "_run", new_callable=AsyncMock) as run:
+        run.return_value = CommandResult(
+            stdout="fixture tcp:1234 localabstract:scrcpy_01234567\n\n"
+        )
+        assert await client.list_forwards() == (
+            ("fixture", "tcp:1234", "localabstract:scrcpy_01234567"),
+        )
+        run.assert_awaited_with(["forward", "--list"], 10.0)
+        run.return_value = CommandResult(stdout="unexpected output")
+        with pytest.raises(RuntimeError, match="Malformed"):
+            await client.list_forwards()
+        run.return_value = CommandResult(timeout=True)
+        with pytest.raises(RuntimeError, match="inspect"):
+            await client.list_forwards()
+
+
+async def test_pairing_code_stdin_and_redaction() -> None:
+    process = AsyncMock()
+    process.returncode = 0
+    process.stdout.read.side_effect = [b"Successfully paired with host; code 123456", b""]
+    process.stderr.read.side_effect = [b"123456", b""]
+    from unittest.mock import Mock
+
+    process.stdin.write = Mock()
+    process.stdin.close = Mock()
+    with patch("asyncio.create_subprocess_exec", return_value=process) as spawn:
+        result = await SubprocessAdbClient().pair("192.168.1.2:37001", "123456")
+    assert "123456" not in spawn.call_args.args
+    process.stdin.write.assert_called_once_with(b"123456\n")
+    assert result.stdout == "paired"
+    assert not result.stderr
+    with pytest.raises(ValueError):
+        await SubprocessAdbClient().pair("192.168.1.2:37001", "wrong")
+
+
+async def test_local_pty_controls_resize_and_cleanup() -> None:
+    import os
+
+    from android_fleet.adb.subprocess import AdbTerminal
+
+    master, slave = os.openpty()
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-u",
+        "-c",
+        'import tty,os; tty.setraw(0); os.write(1,b"ready"); os.write(1,os.read(0,3))',
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+    )
+    os.close(slave)
+    transport = AdbTerminal(process, master)
+    try:
+        assert await asyncio.wait_for(transport.read(), 3) == b"ready"
+        await transport.resize(120, 40)
+        await transport.write(b"\x03ab")
+        assert await asyncio.wait_for(transport.read(), 3) == b"\x03ab"
+    finally:
+        await transport.close()
+    assert process.returncode is not None
+    assert transport.closed
+
+
+async def test_resize_notifies_owned_client_without_controlling_terminal() -> None:
+    import os
+
+    from android_fleet.adb.subprocess import AdbTerminal
+
+    master, slave = os.openpty()
+    script = "\n".join(
+        (
+            "import os",
+            "import signal",
+            "",
+            "def on_resize(_signum, _frame):",
+            "    size = os.get_terminal_size(0)",
+            '    value = f"{size.lines} {size.columns}".encode()',
+            "    os.write(1, value)",
+            "",
+            "signal.signal(signal.SIGWINCH, on_resize)",
+            'os.write(1, b"ready")',
+            "signal.pause()",
+        )
+    )
+    process = await asyncio.create_subprocess_exec(
+        sys.executable, "-u", "-c", script, stdin=slave, stdout=slave, stderr=slave
+    )
+    os.close(slave)
+    transport = AdbTerminal(process, master)
+    try:
+        assert await asyncio.wait_for(transport.read(), 3) == b"ready"
+        await transport.resize(120, 40)
+        assert await asyncio.wait_for(transport.read(), 3) == b"40 120"
+    finally:
+        await transport.close()

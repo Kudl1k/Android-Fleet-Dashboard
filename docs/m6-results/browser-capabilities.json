@@ -1,0 +1,29 @@
+[
+  {
+    "name": "chromium",
+    "version": "156.0.8078.4",
+    "secure": true,
+    "decoder": true,
+    "h264": true,
+    "canvas": true,
+    "fullscreen": true
+  },
+  {
+    "name": "firefox",
+    "version": "157.0",
+    "secure": true,
+    "decoder": true,
+    "h264": true,
+    "canvas": true,
+    "fullscreen": true
+  },
+  {
+    "name": "webkit",
+    "version": "27.2",
+    "secure": true,
+    "decoder": true,
+    "h264": true,
+    "canvas": true,
+    "fullscreen": true
+  }
+]

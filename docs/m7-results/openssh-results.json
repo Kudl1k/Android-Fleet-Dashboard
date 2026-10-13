@@ -1,0 +1,10 @@
+{
+  "status": "PASS",
+  "server": "OpenSSH in disposable Alpine container",
+  "host_key_independently_confirmed": true,
+  "pty_initial": "24 80",
+  "pty_resized": "40 120",
+  "ctrl_c_interrupted_sleep": true,
+  "cleanup": true,
+  "published_ssh_ports": false
+}

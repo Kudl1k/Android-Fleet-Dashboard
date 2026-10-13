@@ -107,3 +107,18 @@ For future remote access, use a privately reachable HTTPS reverse proxy or authe
 VPN/proxy arrangement, explicit authenticated reads and firewall rules. Keep the existing
 loopback bindings, omit public ADB exposure and test proxy headers/screenshot protection.
 The current localhost HTTP is unencrypted; M4.5 does not enable remote access or TLS.
+
+## M5 streaming upgrade
+
+The backend image contains the official scrcpy 3.3.4 server at `/opt/scrcpy/scrcpy-server`, with a build-time SHA-256 check and Apache-2.0 license. No desktop scrcpy renderer, transcoder, privileged container or separate media service is needed. nginx forwards WebSocket upgrades through the existing `/api/` proxy. No ports or existing volume names change. A private `screen-transports.json` manifest in the registry volume supports scoped restart cleanup; it contains transport ownership metadata, not screen frames or bearer credentials.
+
+Compose exposes `ANDROID_FLEET_SCREEN_MAX_SESSIONS` (4), `ANDROID_FLEET_SCREEN_MAX_PER_DEVICE` (2), `ANDROID_FLEET_SCREEN_MAX_PER_USER` (2), `ANDROID_FLEET_SCREEN_IDLE_SECONDS` (30) and `ANDROID_FLEET_SCREEN_ALLOWED_ORIGINS` (JSON array of the two localhost dashboard origins). Backend settings additionally support `ANDROID_FLEET_SCREEN_SERVER_PATH` and `ANDROID_FLEET_SCREEN_QUEUE_FRAMES` (8). Keep one backend worker. Preserve existing `.env`, pairing credentials and volumes; use the coordinated backup procedure above before rebuilding this project's backend/frontend.
+
+After replacement, check `/ready`, existing registry UUIDs and telemetry, then start a view-only session in current Chromium. Stop it and confirm active-session/controller metrics and forwarding cleanup. Live interactive hardware tests require separate explicit authorization. Actual results are in [M5 validation](M5_VALIDATION.md); browser compatibility and transport choices are in [M5 architecture](M5_ARCHITECTURE.md).
+
+## M7 containers
+
+AsyncSSH/cryptography run within the existing backend; Linux PTYs use Python standard
+library with the existing ADB binary. No extra published SSH/ADB ports, privileged mode,
+Docker socket or key/database volume changes. The existing nginx API upgrade proxy also
+serves terminal WebSockets. See [M7 deployment guide](M7_SSH_CONFIGURATION.md).

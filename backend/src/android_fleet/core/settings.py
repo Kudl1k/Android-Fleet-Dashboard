@@ -1,7 +1,26 @@
+import ipaddress
 from pathlib import Path
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def normalize_pairing_network(value: str) -> str:
+    network = ipaddress.ip_network(value.strip(), strict=False)
+    if isinstance(network, ipaddress.IPv4Network):
+        valid_range = network.prefixlen >= 16 and any(
+            network.subnet_of(ipaddress.IPv4Network(candidate))
+            for candidate in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+        )
+    else:
+        valid_range = network.prefixlen >= 48 and network.subnet_of(
+            ipaddress.IPv6Network("fc00::/7")
+        )
+    if not valid_range:
+        raise ValueError(
+            "Pairing CIDRs must be private LAN ranges no broader than IPv4 /16 or IPv6 /48"
+        )
+    return str(network)
 
 
 class Settings(BaseSettings):
@@ -102,6 +121,95 @@ class Settings(BaseSettings):
         default=None, validation_alias="ANDROID_FLEET_RBAC_CREDENTIALS"
     )
     anonymous_viewer: bool = Field(default=False, validation_alias="ANDROID_FLEET_ANONYMOUS_VIEWER")
+    terminal_adb_enabled: bool = Field(
+        default=False, validation_alias="ANDROID_FLEET_TERMINAL_ADB_ENABLED"
+    )
+    terminal_max_sessions: int = Field(
+        default=16, ge=1, le=128, validation_alias="ANDROID_FLEET_TERMINAL_MAX_SESSIONS"
+    )
+    terminal_max_per_user: int = Field(
+        default=4, ge=1, le=32, validation_alias="ANDROID_FLEET_TERMINAL_MAX_PER_USER"
+    )
+    terminal_max_per_device: int = Field(
+        default=2, ge=1, le=8, validation_alias="ANDROID_FLEET_TERMINAL_MAX_PER_DEVICE"
+    )
+    terminal_idle_seconds: float = Field(
+        default=300,
+        ge=5,
+        le=3600,
+        allow_inf_nan=False,
+        validation_alias="ANDROID_FLEET_TERMINAL_IDLE_SECONDS",
+    )
+    terminal_lifetime_seconds: float = Field(
+        default=3600,
+        ge=10,
+        le=86400,
+        allow_inf_nan=False,
+        validation_alias="ANDROID_FLEET_TERMINAL_LIFETIME_SECONDS",
+    )
+    terminal_queue_chunks: int = Field(
+        default=16, ge=1, le=64, validation_alias="ANDROID_FLEET_TERMINAL_QUEUE_CHUNKS"
+    )
+    terminal_path: Path | None = Field(default=None, validation_alias="ANDROID_FLEET_TERMINAL_PATH")
+    terminal_allowed_origins: tuple[str, ...] = Field(
+        default=("http://127.0.0.1:8088", "http://localhost:8088"),
+        validation_alias="ANDROID_FLEET_TERMINAL_ALLOWED_ORIGINS",
+    )
+    ssh_encryption_key: SecretStr | None = Field(
+        default=None, validation_alias="ANDROID_FLEET_SSH_ENCRYPTION_KEY"
+    )
+    ssh_destinations: list[str] = Field(
+        default_factory=list, validation_alias="ANDROID_FLEET_SSH_DESTINATIONS"
+    )
+    pairing_allowed_hosts: tuple[str, ...] = Field(
+        default=(), validation_alias="ANDROID_FLEET_PAIRING_ALLOWED_HOSTS"
+    )
+
+    @field_validator("pairing_allowed_hosts")
+    @classmethod
+    def validate_pairing_networks(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        try:
+            return tuple(normalize_pairing_network(value) for value in values)
+        except ValueError as exc:
+            raise ValueError("Pairing destinations must be private IPs or bounded CIDRs") from exc
+
+    pairing_timeout: float = Field(
+        default=15,
+        ge=1,
+        le=60,
+        allow_inf_nan=False,
+        validation_alias="ANDROID_FLEET_PAIRING_TIMEOUT",
+    )
+    pairing_attempts_per_minute: int = Field(
+        default=5, ge=1, le=20, validation_alias="ANDROID_FLEET_PAIRING_ATTEMPTS_PER_MINUTE"
+    )
+    screen_server_path: Path = Field(
+        default=Path("/opt/scrcpy/scrcpy-server"),
+        validation_alias="ANDROID_FLEET_SCREEN_SERVER_PATH",
+    )
+    screen_max_sessions: int = Field(
+        default=4, ge=1, le=32, validation_alias="ANDROID_FLEET_SCREEN_MAX_SESSIONS"
+    )
+    screen_max_per_device: int = Field(
+        default=2, ge=1, le=8, validation_alias="ANDROID_FLEET_SCREEN_MAX_PER_DEVICE"
+    )
+    screen_max_per_user: int = Field(
+        default=2, ge=1, le=8, validation_alias="ANDROID_FLEET_SCREEN_MAX_PER_USER"
+    )
+    screen_idle_seconds: float = Field(
+        default=30,
+        ge=5,
+        le=300,
+        allow_inf_nan=False,
+        validation_alias="ANDROID_FLEET_SCREEN_IDLE_SECONDS",
+    )
+    screen_queue_frames: int = Field(
+        default=8, ge=1, le=32, validation_alias="ANDROID_FLEET_SCREEN_QUEUE_FRAMES"
+    )
+    screen_allowed_origins: tuple[str, ...] = Field(
+        default=("http://127.0.0.1:8088", "http://localhost:8088"),
+        validation_alias="ANDROID_FLEET_SCREEN_ALLOWED_ORIGINS",
+    )
     audit_retention_seconds: int = Field(
         default=7776000, ge=3600, validation_alias="ANDROID_FLEET_AUDIT_RETENTION_SECONDS"
     )

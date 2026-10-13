@@ -1,0 +1,7 @@
+{
+  "status": "PASS",
+  "socket_closed": "CLOSED",
+  "persistent_session_closed": true,
+  "active_sessions": 0,
+  "no_automatic_reconnect": true
+}

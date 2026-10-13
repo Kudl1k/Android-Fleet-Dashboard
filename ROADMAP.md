@@ -35,8 +35,8 @@ automated, Docker, real-device and browser evidence and remaining limitations.
 
 ## M4 – Secure Remote Device Control
 
-Implementation and local automated validation complete on 2026-10-09; deployment,
-browser and real-device acceptance remain pending due session sandbox restrictions.
+Implementation, automated validation and approved safe deployment/browser/Samsung
+acceptance complete on 2026-10-09; see the M4.5 runtime continuation for evidence.
 See [M4 validation](docs/M4_VALIDATION.md) for exact results and limitations.
 
 - [x] Fleet-wide viewer/operator/administrator operation permissions, named hashed tokens,
@@ -50,20 +50,21 @@ See [M4 validation](docs/M4_VALIDATION.md) for exact results and limitations.
 - [x] Permission-aware Device Control, Operations and Audit UI, explicit confirmations.
 - [x] Resolved alert retention and evaluation health metrics/reconnect regression tests.
 - [x] Backend/frontend tests, lint, typechecking, production frontend build and Compose config.
-- [ ] Docker image builds and deployment/restart acceptance in an authorized runtime.
-- [ ] Desktop/mobile browser acceptance (Chromium launch denied by sandbox).
-- [ ] Safe Samsung hardware state/properties/apps/screenshot acceptance (runtime inaccessible).
+- [x] Docker image builds and deployment/restart acceptance in an authorized runtime.
+- [x] Desktop/mobile Chromium acceptance.
+- [x] Safe Samsung hardware state/properties/apps/screenshot acceptance.
 
 Recovery/bootloader modes deliberately report unsupported without verified vendor
 capability. Screen sleep cannot promise immediate secure keyguard locking. No actual
-hardware reboot/package mutation was performed. M4 must not be marked fully accepted
-until pending runtime/hardware criteria pass.
+hardware reboot/package mutation was performed. Approved safe runtime criteria passed;
+destructive hardware and broader OEM/rooted acceptance remain outside this scope.
 
 ## M4.5 – Deployment, Security Hardening & Acceptance
 
-**Incomplete** on 2026-10-09: Docker/localhost IPC, browser startup and GitHub SSH
-remain blocked in this execution session, including after the access-change retry.
-See [M4.5 validation](docs/M4_5_VALIDATION.md) for PASS/BLOCKED/NOT RUN evidence.
+**Ready to close** on 2026-10-09: runtime access restored; verified active backups,
+local deployment, role/audit/persistence, four safe Samsung checks, screenshot expiry,
+desktop/mobile Chromium and restart/recreation acceptance passed. GitHub DNS/HTTPS
+works; no publication was attempted. See [M4.5 validation](docs/M4_5_VALIDATION.md).
 
 - [x] Fix route-word device identifier authorization bypass; regression tests.
 - [x] Default protected fleet API reads to authentication; explicit anonymous opt-in.
@@ -72,27 +73,68 @@ See [M4.5 validation](docs/M4_5_VALIDATION.md) for PASS/BLOCKED/NOT RUN evidence
 - [x] Safe four-operation REST acceptance utility with protected PNG/audit verification.
 - [x] Fresh automated validation: 379 backend tests, 45 frontend tests, all lint/type/build
   checks and Compose configuration pass.
-- [ ] Inspect and back up active databases/volumes; verify existing ADB key persistence.
-- [ ] Build/deploy backend/frontend and verify health, monitoring and controlled restart.
-- [ ] Deployed role acceptance, Samsung properties/apps/state/screenshot and retention.
-- [ ] Actual desktop/mobile browser acceptance.
+- [x] Inspect and back up active databases/volumes; verify existing ADB key persistence.
+- [x] Build/deploy backend/frontend and verify health, monitoring and controlled restart.
+- [x] Deployed role acceptance, Samsung properties/apps/state/screenshot and retention.
+- [x] Actual desktop/mobile browser acceptance.
 
-No active volumes, credentials, containers or Colima settings were modified. The
+Only project application containers were replaced; volumes and Colima settings were
+preserved. Temporary acceptance credentials/retention were restored. The
 existing monitoring endpoints remain unauthenticated within the loopback/trusted-Docker
 network boundary; M4.5 does not claim all telemetry surfaces require credentials.
-Finish blocked runtime acceptance before starting M5 implementation.
+M5 may begin within the existing local boundary; scoped permissions, bounded streaming
+and private HTTPS design remain required before remote interaction deployment.
 
-## M5 – Scoped Remote Interaction
+## M5 – Live Screen Mirroring & Interactive Control
 
-Build on M4 permissions/jobs for narrowly scoped screen/input interaction with
-protected streaming, bounded frames/output, backpressure, cancellation and per-device
-scope. Verify OEM-specific capabilities and broader non-root hardware support. Finish
-M4 runtime/mobile acceptance, TLS/private-read deployment hardening and load/soak tests.
-Terminal, arbitrary shell, logcat streams and filesystem transfers require distinct
-security contracts and remain deferred; they are not automatically enabled by M4.
+Implemented and deployed within the local-only boundary. Actual Samsung SM-A356B
+H.264 frames were decoded in Chromium; view-only authorization, session cleanup and
+monitoring continuity passed. Automated backend/frontend, Docker and browser evidence,
+measured performance and pending interactive-hardware acceptance are recorded in
+[M5 validation](docs/M5_VALIDATION.md). No physical input was sent. Other OEM/rooted
+devices and long-duration fleet soak remain unverified.
 
-## M6 – Advanced hardware monitoring
-Qualcomm, Tensor, Exynos and MediaTek extensions; GPU, NPU/DSP where possible; thermal throttling detection with evidence and graceful fallback.
+- [x] Version-pinned official scrcpy server via authenticated ADB and WebCodecs playback.
+- [x] Owner-bound sessions/tickets, explicit `screen:*` permissions, audit and scoped RBAC.
+- [x] Bounded device/user/session limits, exclusive controller, input validation/rate limit,
+  reconnect, idle/disconnect recovery, cleanup and low-cardinality metrics.
+- [x] Responsive view-only and explicit control UI, focused keyboard, pointer/touch,
+  Android navigation, quality, fullscreen and decoder/backpressure handling.
+- [x] Backend/frontend tests, static checks, image build, local deployment, browser and
+  safe real-device view-only acceptance.
+- [ ] Interactive input acceptance on the physical Samsung; awaiting explicit approval.
 
-## M7 – Hardening
-Authentication, authorization, audit log, TLS/reverse proxy, production deployment, observability, key lifecycle and long-term stability. Security work is incremental and gates earlier control functionality, not postponed until after public release.
+Remote TLS/identity lifecycle and shared encoder fan-out remain hardening work.
+Terminal, arbitrary shell, logcat streams and file transfer need distinct contracts.
+
+## M6 – Stability, Compatibility & Performance
+
+Implemented and validated within the short local acceptance scope on 2026-10-10:
+471 backend tests, 67 frontend tests, static checks/builds, actual Chromium/Firefox/
+WebKit desktop/mobile-emulation playback, restart cleanup and a completed five-minute
+view-only smoke. Stabilizes M5 through strict live geometry,
+decoder lifecycle, independent viewer/device cleanup, capacity/drop metrics, browser
+acceptance and a configurable no-input soak harness. Physical input and rotation remain
+pending at the user’s explicit request; the user also skipped long soak completion.
+The interrupted two-viewer run cleaned all owned resources. Full long-duration
+certification is pending. Results and limitations are recorded in
+[M6 validation](docs/M6_VALIDATION.md) and [performance](docs/M6_PERFORMANCE.md).
+
+Advanced vendor hardware monitoring remains future scope: Qualcomm, Tensor, Exynos and
+MediaTek extensions; GPU, NPU/DSP where available and evidence-based throttling detection.
+
+## M7 – SSH & Remote Terminal Management
+
+Implemented browser xterm terminals for registered-device ADB and approved SSH profiles,
+encrypted credentials and pinned host keys, owner-bound authenticated WebSockets,
+bounded session lifecycle/history/audit, and administrator Wireless Debugging pairing,
+separate connect/verify/register and identity-preserving port updates. Validation and
+pending acceptance are recorded in [M7 validation](docs/M7_VALIDATION.md); configuration
+is in [SSH and pairing guide](docs/M7_SSH_CONFIGURATION.md). Physical shells/new pairing
+and deployment remain pending explicit approval; no public SSH/ADB ports are added.
+
+## M8 – Remote deployment hardening and fleet reliability
+
+Private HTTPS/WSS, identity/token lifecycle, managed secret-file integration, profile
+policy administration, approved hardware terminal/pairing acceptance, longer stability
+runs and broader OEM coverage. Keep incremental security gates before remote release.
