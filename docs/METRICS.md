@@ -36,6 +36,24 @@ All families use `device_id`; additional dimensions are shown below.
 | `android_uptime_seconds` | Gauge | Device uptime |
 | `android_temperature_celsius` | Gauge | Live thermal temperature; `sensor`, `type` |
 | `android_thermal_status` | Gauge | Android thermal severity, integer 0–6 |
+| `android_battery_charge_ampere_hours` | Gauge | Remaining charge from `dumpsys battery` "Charge counter" (µAh); 0 is treated as unsupported |
+| `android_battery_charge_full_ampere_hours` | Gauge | Current full capacity (`charge_full`, read through `su` when rooted) |
+| `android_battery_charge_full_design_ampere_hours` | Gauge | Design capacity (`charge_full_design`); full/design is the wear ratio |
+| `android_battery_cycle_count` | Gauge | Fuel-gauge charge cycle counter |
+| `android_device_info` | Gauge | Always 1; `manufacturer`, `model`, `android_version`, `soc`, `kernel` from the last probe |
+| `android_cpu_max_frequency_hz` | Gauge | Hardware maximum (`cpuinfo_max_freq`); `core` |
+| `android_cpu_frequency_limit_hz` | Gauge | Current policy ceiling (`scaling_max_freq`); `core` |
+| `android_cpu_frequency_capped` | Gauge | 1 when any core's ceiling is below its hardware maximum |
+| `android_zram_disk_size_bytes` | Gauge | Configured ZRAM swap size, summed over zram devices |
+| `android_zram_original_data_bytes` | Gauge | Uncompressed data stored in ZRAM |
+| `android_zram_compressed_data_bytes` | Gauge | Compressed size of that data |
+| `android_zram_memory_used_bytes` | Gauge | RAM consumed by ZRAM including allocator overhead |
+| `android_gpu_usage_ratio` | Gauge | GPU busy ratio (Adreno kgsl or Mali `utilization`) |
+| `android_gpu_frequency_hz` | Gauge | Current GPU clock |
+| `android_gpu_max_frequency_hz` | Gauge | Maximum GPU clock |
+| `android_process_count` | Gauge | Number of processes visible in `/proc` |
+| `android_process_cpu_ratio` | Gauge | Top 5 processes by CPU, in cores (1 = one busy core); `process` |
+| `android_process_memory_bytes` | Gauge | Top 5 processes by resident memory; `process` |
 
 CPU dimensions allow cores 0–255. Network interface values are bounded names, with at most 32 distinct interfaces per snapshot. Thermal types use a fixed vocabulary; at most 32 distinct sensor names are exported per snapshot. Only `/data` is a storage dimension. No process IDs, arbitrary paths or raw command output become labels. Duplicate metric identities are emitted once.
 
@@ -49,7 +67,19 @@ Storage queries `/data` filesystem output, accepting its bounded Android bind-mo
 
 Thermal collection prefers live temperatures from `dumpsys thermalservice`, excluding cached thresholds and cooling-device state. A readable sysfs fallback converts thermal-zone millidegrees to Celsius. Battery Current Limiter zones are excluded because they may expose electrical values rather than temperature. Sensor names are bounded and sanitized. Thermal status is severity, not a temperature or a direct proof of throttling. Unknown vendor formats remain unsupported.
 
-The manually checked registration named Pixel (probed model SM-A356B, Android 16) exposed the core read-only sources, but this does not establish support across Android versions, OEMs or non-rooted fleets. No metric assumes root. Hardware-specific GPU/NPU/DSP implementations remain deferred and must implement explicit applicability and capability contracts; chipset strings alone do not establish support.
+The manually checked registration named Pixel (probed model SM-A356B, Android 16) exposed the core read-only sources, but this does not establish support across Android versions, OEMs or non-rooted fleets. No metric assumes root; root only widens what the same collectors can read. Adreno and Mali GPU backends exist (see below); NPU/DSP sources remain future backends under the same evidence rule: chipset strings alone do not establish support.
+
+## Root-aware and vendor collectors
+
+ZRAM, GPU, process and CPU-ceiling collectors each run one bounded read-only shell script per poll. When the probe observed root (`ROOT_SHELL`), the script runs through `su -c`, because SELinux commonly hides `/proc/<pid>`, thermal zones and vendor sysfs from the shell user; a denied or failing `su` falls back to the unprivileged shell. Thermal sysfs and `/proc/stat` use the same elevation only as a fallback. Magisk should allow uid 2000 without notifications (see `device-setup/`), otherwise every poll raises a toast.
+
+GPU backends are selected by sysfs evidence, not chipset names: Qualcomm Adreno via `/sys/class/kgsl/kgsl-3d0` (`gpu_busy_percentage`, else the `gpubusy` busy/total window; clocks in Hz) and Arm Mali (Google Tensor, Exynos, MediaTek) via `/sys/devices/platform/*.mali` or `/sys/class/misc/mali0/device` (`utilization` percent, clocks in kHz). Unknown GPUs produce no observations. New platforms, including NPU/DSP sources, are added as further backends in `collectors/gpu.py` or a sibling collector with the same evidence rule. The Mali paths are unverified on the lab's Pixel 9 Pro until hardware acceptance.
+
+On 2026-10-13 the exact collector commands were run read-only through the root shell of the lab Pixel 3a XL (SDM670, Android 12, kernel 4.9) and replayed through the probe, pipeline and exporter: all families above were produced, including Adreno GPU, ZRAM, CPU ceilings, 13 thermal sensors and processes. Two defects found there are fixed: Android 11+ toybox `df -k /data` names the `/data_mirror/...` bind of the same filesystem (storage was dropped), and zygote-spawned processes keep the generic comm `main`, so their argv[0] is preferred. The battery `Charge counter` format was observed on that phone; the `charge_full`, `charge_full_design` and `cycle_count` sysfs files were added afterwards and are not yet verified on lab hardware. This was not an ADB-transport acceptance; the adb shell user (uid 2000) and the real polling loop remain to be verified.
+
+ZRAM uses `mm_stat`, or the separate `orig_data_size`/`compr_data_size`/`mem_used_total` files on kernels before 4.2; an unconfigured device (disksize 0) is skipped. Process CPU is the utime+stime delta between polls divided by elapsed time in USER_HZ (100) ticks; the first poll after start or reconnect is a baseline only, and PID reuse is detected through the process start time. RSS assumes 4 KiB pages. Names prefer the full `argv[0]` from `cmdline` over the 15-byte kernel `comm`; only the top five per dimension become labels, so cardinality stays bounded while names may change over time.
+
+A frequency ceiling below the hardware maximum is evidence of capping, which thermal mitigation causes through cpufreq cooling devices but power HAL policies can also cause. Dashboards show it next to temperatures and the Android thermal status rather than labelling it throttling on its own.
 
 ## Freshness, API and local history
 
