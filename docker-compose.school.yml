@@ -1,0 +1,31 @@
+# Small-VM profile (school VM: 2 vCPU, 1.4 GiB RAM, ~2.9 GB free disk).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.school.yml up -d --no-build
+#
+# Images are built elsewhere and loaded with deploy/school/ship_images.sh, because
+# a local build needs ~1 GB of extra build cache. Measured steady-state memory of
+# the whole stack in fake mode is ~160 MiB; the limits below leave headroom while
+# protecting the VM from a runaway container.
+services:
+  android-manager:
+    image: android-fleet-dashboard-android-manager:latest
+    pull_policy: never
+    mem_limit: 384m
+  frontend:
+    image: android-fleet-dashboard-frontend:latest
+    pull_policy: never
+    mem_limit: 64m
+  prometheus:
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # Whichever limit is reached first evicts the oldest blocks.
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=400MB
+    mem_limit: 384m
+  grafana:
+    environment:
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+    mem_limit: 256m
