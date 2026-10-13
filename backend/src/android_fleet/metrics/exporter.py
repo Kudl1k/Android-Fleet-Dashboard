@@ -20,6 +20,10 @@ METRICS = {
     "battery_status": "android_battery_status",
     "battery_health": "android_battery_health",
     "battery_charging": "android_battery_charging",
+    "battery_charge": "android_battery_charge_ampere_hours",
+    "battery_charge_full": "android_battery_charge_full_ampere_hours",
+    "battery_charge_full_design": "android_battery_charge_full_design_ampere_hours",
+    "battery_cycle_count": "android_battery_cycle_count",
     "cpu_usage": "android_cpu_usage_ratio",
     "cpu_core_usage": "android_cpu_core_usage_ratio",
     "cpu_frequency": "android_cpu_frequency_hz",
@@ -35,7 +39,28 @@ METRICS = {
     "uptime": "android_uptime_seconds",
     "thermal_temperature": "android_temperature_celsius",
     "thermal_status": "android_thermal_status",
+    "cpu_max_frequency": "android_cpu_max_frequency_hz",
+    "cpu_frequency_limit": "android_cpu_frequency_limit_hz",
+    "cpu_frequency_capped": "android_cpu_frequency_capped",
+    "zram_disk_size": "android_zram_disk_size_bytes",
+    "zram_original_data": "android_zram_original_data_bytes",
+    "zram_compressed_data": "android_zram_compressed_data_bytes",
+    "zram_memory_used": "android_zram_memory_used_bytes",
+    "gpu_usage": "android_gpu_usage_ratio",
+    "gpu_frequency": "android_gpu_frequency_hz",
+    "gpu_max_frequency": "android_gpu_max_frequency_hz",
+    "process_count": "android_process_count",
+    "process_cpu": "android_process_cpu_ratio",
+    "process_memory": "android_process_memory_bytes",
 }
+INFO_LABELS = ("manufacturer", "model", "android_version", "soc", "kernel")
+_LIMITS = {"interface": 32, "sensor": 32, "core": 256, "process": 16}
+
+
+def _info_value(value: str | None) -> str:
+    # Free-form properties become bounded printable label values, never label names.
+    text = "".join(c if c.isprintable() else "_" for c in (value or "").strip())
+    return text[:64]
 
 
 class FleetExporter:
@@ -64,6 +89,11 @@ class FleetExporter:
             "Last successful device observation, Unix seconds.",
             labels=["device_id"],
         )
+        info = GaugeMetricFamily(
+            "android_device_info",
+            "Probed device identity; value is always 1.",
+            labels=["device_id", *INFO_LABELS],
+        )
         collected = GaugeMetricFamily(
             "android_metrics_last_collection_timestamp_seconds",
             "Fresh metric snapshot observation, Unix seconds.",
@@ -82,6 +112,9 @@ class FleetExporter:
             up.add_metric([device.id], float(device.state == DeviceState.ONLINE))
             if device.last_seen is not None:
                 seen.add_metric([device.id], device.last_seen.timestamp())
+            identity_fields = tuple(_info_value(getattr(device, key)) for key in INFO_LABELS)
+            if any(identity_fields):
+                info.add_metric([device.id, *identity_fields], 1)
             if device.state != DeviceState.ONLINE:
                 continue
             if device.root_available is not None:
@@ -96,7 +129,7 @@ class FleetExporter:
                 continue
             collected.add_metric([device.id], snapshot.observed_at.timestamp())
             identities: set[tuple[str, tuple[str, ...]]] = set()
-            dimensions: dict[str, set[str]] = {"interface": set(), "sensor": set(), "core": set()}
+            dimensions: dict[str, set[str]] = {key: set() for key in _LIMITS}
             for value in snapshot.values:
                 if value.name not in families or not valid_metric(value):
                     continue
@@ -106,9 +139,8 @@ class FleetExporter:
                 identity = (value.name, label_values)
                 if identity in identities:
                     continue
-                limits = {"interface": 32, "sensor": 32, "core": 256}
                 if any(
-                    label not in dimensions[key] and len(dimensions[key]) >= limits[key]
+                    label not in dimensions[key] and len(dimensions[key]) >= _LIMITS[key]
                     for key, label in labels.items()
                     if key in dimensions
                 ):
@@ -120,6 +152,7 @@ class FleetExporter:
                 families[value.name].add_metric([device.id, *label_values], value.value)
         yield up
         yield rooted
+        yield info
         yield seen
         yield collected
         yield from families.values()

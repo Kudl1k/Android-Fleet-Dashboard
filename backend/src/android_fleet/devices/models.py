@@ -58,6 +58,7 @@ class Device:
     sdk: int | None = None
     abi: str | None = None
     soc: str | None = None
+    kernel: str | None = None
     root_available: bool | None = None
     capabilities: set[DeviceCapability] = field(default_factory=set)
     last_seen: datetime | None = None

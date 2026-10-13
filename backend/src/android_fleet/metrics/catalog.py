@@ -30,6 +30,10 @@ DEFINITIONS: dict[str, MetricDefinition] = {
     "battery_status": MetricDefinition("level", minimum=1, maximum=5),
     "battery_health": MetricDefinition("level", minimum=1, maximum=7),
     "battery_charging": MetricDefinition("boolean", maximum=1),
+    "battery_charge": MetricDefinition("ampere_hours", maximum=100),
+    "battery_charge_full": MetricDefinition("ampere_hours", maximum=100),
+    "battery_charge_full_design": MetricDefinition("ampere_hours", maximum=100),
+    "battery_cycle_count": MetricDefinition("count", maximum=100_000),
     "cpu_usage": MetricDefinition("ratio", maximum=1),
     "cpu_core_usage": MetricDefinition("ratio", labels=("core",), maximum=1),
     "cpu_frequency": MetricDefinition("hertz", labels=("core",)),
@@ -47,8 +51,30 @@ DEFINITIONS: dict[str, MetricDefinition] = {
         "celsius", labels=("sensor", "type"), minimum=-40, maximum=200
     ),
     "thermal_status": MetricDefinition("level", maximum=6),
+    "cpu_max_frequency": MetricDefinition("hertz", labels=("core",)),
+    "cpu_frequency_limit": MetricDefinition("hertz", labels=("core",)),
+    "cpu_frequency_capped": MetricDefinition("boolean", maximum=1),
+    "zram_disk_size": MetricDefinition("bytes"),
+    "zram_original_data": MetricDefinition("bytes"),
+    "zram_compressed_data": MetricDefinition("bytes"),
+    "zram_memory_used": MetricDefinition("bytes"),
+    "gpu_usage": MetricDefinition("ratio", maximum=1),
+    "gpu_frequency": MetricDefinition("hertz"),
+    "gpu_max_frequency": MetricDefinition("hertz"),
+    "process_count": MetricDefinition("count", maximum=1_000_000),
+    "process_cpu": MetricDefinition("ratio", labels=("process",), maximum=256),
+    "process_memory": MetricDefinition("bytes", labels=("process",)),
 }
 
+_INTEGER_METRICS = {
+    "thermal_status",
+    "battery_status",
+    "battery_health",
+    "battery_charging",
+    "battery_cycle_count",
+    "cpu_frequency_capped",
+    "process_count",
+}
 _LABEL = re.compile(r"[A-Za-z0-9_.:-]{1,64}\Z")
 _THERMAL_TYPES = {"cpu", "gpu", "battery", "skin", "usb", "power_amplifier", "npu", "unknown"}
 
@@ -61,10 +87,7 @@ def valid_metric(value: MetricValue) -> bool:
         return False
     if definition.maximum is not None and value.value > definition.maximum:
         return False
-    if (
-        value.name in {"thermal_status", "battery_status", "battery_health", "battery_charging"}
-        and not float(value.value).is_integer()
-    ):
+    if value.name in _INTEGER_METRICS and not float(value.value).is_integer():
         return False
     labels = dict(value.labels)
     if len(labels) != len(value.labels) or set(labels) != set(definition.labels):

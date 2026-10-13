@@ -138,3 +138,27 @@ and deployment remain pending explicit approval; no public SSH/ADB ports are add
 Private HTTPS/WSS, identity/token lifecycle, managed secret-file integration, profile
 policy administration, approved hardware terminal/pairing acceptance, longer stability
 runs and broader OEM coverage. Keep incremental security gates before remote release.
+
+## School assignment – root-aware monitoring (2026-10-13)
+
+Implemented and validated in fake mode on an Ubuntu 24.04 VirtualBox VM (Docker, Linux,
+Python 3.13): 554 backend tests passed; 3 pre-existing timing-sensitive streaming/terminal
+tests fail intermittently on the unmodified code too; ruff and mypy clean.
+See [school assignment](docs/SCHOOL_ASSIGNMENT.md), [NAVOD.md](NAVOD.md) (Czech) and
+[metrics](docs/METRICS.md).
+
+- [x] `android_device_info` (manufacturer, model, Android, SoC with board fallback, kernel).
+- [x] Root elevation through `su -c` with unprivileged fallback for ZRAM, GPU, processes,
+  thermal sysfs and `/proc/stat`.
+- [x] ZRAM, CPU frequency ceilings/capping, Adreno and Mali GPU backends, process count
+  and bounded top-5 process CPU/memory.
+- [x] Grafana fleet status table, temperature and capping; device detail panels for the above.
+- [x] `device-setup/`: Magisk boot script (ADB TCP + iptables restricted to the server),
+  ADB key authorization and silent su policy for the ADB shell.
+- [x] Small-VM Compose override and image shipping script (~160 MiB RAM measured).
+- [x] Battery charge, full/design capacity and cycle count (sysfs files unverified on lab hardware).
+- [x] Read-only replay of real Pixel 3a XL root-shell outputs through all collectors
+  (2026-10-13); fixed `/data_mirror` storage and zygote process names.
+- [ ] ADB-transport acceptance on real rooted Pixel 3a XL / Pixel 9 Pro / Nexus 5X
+  (Mali paths unverified).
+- [ ] Deployment to the school VM after approval.

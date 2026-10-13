@@ -3,13 +3,18 @@
 import asyncio
 from pathlib import Path
 
+from android_fleet.collectors.battery import CAPACITY_SCRIPT
 from android_fleet.collectors.cpu import FREQUENCY_SCRIPT
+from android_fleet.collectors.cpu_limits import CPU_LIMITS_SCRIPT
+from android_fleet.collectors.gpu import GPU_SCRIPT
+from android_fleet.collectors.processes import PROCESS_SCRIPT
 from android_fleet.collectors.thermal import THERMAL_SCRIPT
+from android_fleet.collectors.zram import ZRAM_SCRIPT
 from android_fleet.devices.models import DeviceState
 from android_fleet.discovery.models import MdnsService
 from android_fleet.execution.models import CommandResult
 
-BATTERY_OUTPUT = "level: 75\nscale: 100\ntemperature: 285\nvoltage: 4100\n"
+BATTERY_OUTPUT = "level: 75\nscale: 100\ntemperature: 285\nvoltage: 4100\nCharge counter: 2250000\n"
 MEMORY_OUTPUT = (
     "MemTotal:        8000000 kB\nMemAvailable:    3000000 kB\n"
     "SwapTotal:       2000000 kB\nSwapFree:        1000000 kB\n"
@@ -19,7 +24,24 @@ GETPROP_OUTPUT = """[ro.product.manufacturer]: [Google]
 [ro.build.version.release]: [15]
 [ro.product.cpu.abi]: [arm64-v8a]
 [ro.build.version.sdk]: [35]
+[ro.soc.model]: [SDM670]
 """
+ROOT_ONLY_SCRIPTS = {GPU_SCRIPT, ZRAM_SCRIPT, PROCESS_SCRIPT, CAPACITY_SCRIPT}
+
+
+def fake_processes(step: int) -> str:
+    """Two busy and two idle processes whose CPU ticks advance with each poll."""
+    rows = (
+        (1, "init", "/system/bin/init", 0, 1, 900),
+        (612, "surfaceflinger", "/system/bin/surfaceflinger", 40, 210, 12000),
+        (1450, "ndroid.systemui", "com.android.systemui", 25, 340, 52000),
+        (2031, "kworker/0:1", "", 0, 15, 0),
+    )
+    return "".join(
+        f"{pid} ({comm}) S 1 1 0 0 -1 0 0 0 0 0 {100 + rate * step} {20 + rate * step // 2}"
+        f" 0 0 20 0 1 0 {start} 1000000 {rss} 0\t{cmdline}\n"
+        for pid, comm, cmdline, rate, start, rss in rows
+    )
 
 
 class FakeAdbClient:
@@ -35,6 +57,7 @@ class FakeAdbClient:
         self.connection_calls: list[str] = []
         self.disconnection_calls: list[str] = []
         self.cpu_samples: dict[str, int] = {}
+        self.process_samples: dict[str, int] = {}
         self.calls: list[tuple[str, tuple[str, ...]]] = []
 
     async def terminal(self, serial: str, cols: int, rows: int) -> "FakeTerminal":
@@ -93,6 +116,19 @@ class FakeAdbClient:
             return CommandResult(stdout=GETPROP_OUTPUT)
         if argv == ("id", "-u"):
             return CommandResult(stdout="2000\n")
+        if argv == ("uname", "-r"):
+            return CommandResult(stdout="4.9.292-demo\n")
+        if argv[:2] == ("su", "-c") and len(argv) == 3 and argv[2] != "id -u":
+            if serial != "pixel-rooted":
+                return CommandResult(stderr="su: unavailable", exit_code=1)
+            argv = ("sh", "-c", argv[2])
+        elif argv[:2] == ("sh", "-c") and argv[2:] and argv[2] in ROOT_ONLY_SCRIPTS:
+            # Mirrors SELinux: vendor sysfs and other processes are hidden from shell.
+            return CommandResult(stdout="")
+        if argv == ("sh", "-c", PROCESS_SCRIPT) and serial != "pixel-malformed":
+            step = self.process_samples.get(serial, 0)
+            self.process_samples[serial] = step + 1
+            return CommandResult(stdout=fake_processes(step))
         if argv == ("su", "-c", "id -u"):
             if serial == "pixel-rooted":
                 return CommandResult(stdout="0\n")
@@ -146,7 +182,16 @@ class FakeAdbClient:
                 " Temperature{mValue=44.5, mType=0, mName=CPU, mStatus=0}\n"
             ),
             ("sh", "-c", THERMAL_SCRIPT): "thermal_zone0|cpu-0|44500\n",
+            ("sh", "-c", "cat /proc/stat"): "cpu 1 1 1 1 1 1 1 0\n",
+            ("sh", "-c", CPU_LIMITS_SCRIPT): "0 1708800 1708800\n1 1996800 1612800\n",
+            ("sh", "-c", ZRAM_SCRIPT): "zram0 2147483648 805306368 268435456 285212672\n",
+            ("sh", "-c", GPU_SCRIPT): (
+                "vendor=adreno\nbusy_percent=37 %\ncur_hz=504000000\nmax_hz=780000000\n"
+            ),
             ("cat", "/sys/class/power_supply/battery/current_now"): "-500000\n",
+            ("sh", "-c", CAPACITY_SCRIPT): (
+                "charge_full=3000000\ncharge_full_design=3700000\ncycle_count=412\n"
+            ),
         }
         if argv in outputs:
             return CommandResult(
