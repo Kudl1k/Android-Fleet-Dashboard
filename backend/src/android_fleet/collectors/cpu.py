@@ -3,7 +3,13 @@
 import re
 
 from android_fleet.adb.base import AdbClient
-from android_fleet.collectors.common import can_collect, read_shell, snapshot, validate_timeout
+from android_fleet.collectors.common import (
+    can_collect,
+    read_script,
+    read_shell,
+    snapshot,
+    validate_timeout,
+)
 from android_fleet.devices.models import Device, DeviceCapability
 from android_fleet.metrics.catalog import valid_metric
 from android_fleet.metrics.models import MetricSnapshot, MetricValue
@@ -102,6 +108,9 @@ class CpuCollector:
             self.reset(device.id)
             return snapshot(device)
         output = await read_shell(adb, device.serial, ("cat", "/proc/stat"), self._timeout)
+        if output is None and DeviceCapability.ROOT_SHELL in device.capabilities:
+            # Some vendor SELinux policies deny /proc/stat to the shell user.
+            output = await read_script(adb, device, "cat /proc/stat", self._timeout)
         counters = parse_cpu_stat(output) if output is not None else {}
         values: tuple[MetricValue, ...] = ()
         if "cpu" in counters:

@@ -29,15 +29,22 @@ def test_exporter_covers_catalog_with_expected_units_labels() -> None:
         "interface": "wlan0",
         "sensor": "cpu0",
         "type": "cpu",
+        "process": "surfaceflinger",
+    }
+    integers = {
+        "thermal_status",
+        "battery_status",
+        "battery_health",
+        "battery_charging",
+        "battery_cycle_count",
+        "cpu_frequency_capped",
+        "process_count",
     }
     for name, definition in DEFINITIONS.items():
         values.append(
             MetricValue(
                 name,
-                1.0
-                if name
-                in {"thermal_status", "battery_status", "battery_health", "battery_charging"}
-                else 0.5,
+                1.0 if name in integers else 0.5,
                 definition.unit,
                 tuple((key, label_examples[key]) for key in definition.labels),
             )
@@ -123,6 +130,8 @@ def test_versioned_dashboards_use_supported_metrics_and_prometheus_datasource() 
     known = {
         *METRICS.values(),
         "android_device_up",
+        "android_device_info",
+        "android_device_rooted",
         "android_metrics_last_collection_timestamp_seconds",
         "android_screen_active_sessions",
         "android_screen_active_viewers",
@@ -145,7 +154,8 @@ def test_versioned_dashboards_use_supported_metrics_and_prometheus_datasource() 
             assert panel["datasource"]["uid"] == "prometheus"
             for target in panel["targets"]:
                 assert target["datasource"]["uid"] == "prometheus"
-                assert set(re.findall(r"android_[a-z_]+", target["expr"])) <= known
+                metrics_only = re.sub(r"\bby \([^)]*\)", "", target["expr"])
+                assert set(re.findall(r"android_[a-z_]+", metrics_only)) <= known
                 assert "or vector(0)" not in target["expr"]
                 if "network_" in target["expr"]:
                     assert "rate(" in target["expr"]

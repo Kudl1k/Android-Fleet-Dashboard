@@ -14,11 +14,12 @@ def parse_storage(output: str) -> tuple[MetricValue, ...]:
         if len(fields) < 6:
             continue
         mount = fields[-1]
-        # Android may resolve /data to a bind-mounted per-user data directory.
+        # Android may resolve /data to a bind-mounted per-user data directory, and
+        # Android 11+ toybox df can name a /data_mirror bind of the same filesystem.
         # Keep the dimension tied to the queried logical capacity, not that path.
         if (
             len(mount) > 256
-            or re.fullmatch(r"/data(?:/[A-Za-z0-9_.:-]{1,64}){0,8}", mount) is None
+            or re.fullmatch(r"/data(?:_mirror)?(?:/[A-Za-z0-9_.:-]{1,64}){0,8}", mount) is None
             or any(part in {".", ".."} for part in mount.split("/"))
         ):
             continue

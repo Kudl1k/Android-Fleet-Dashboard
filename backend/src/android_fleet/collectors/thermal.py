@@ -3,7 +3,13 @@
 import re
 
 from android_fleet.adb.base import AdbClient
-from android_fleet.collectors.common import can_collect, read_shell, snapshot, validate_timeout
+from android_fleet.collectors.common import (
+    can_collect,
+    read_script,
+    read_shell,
+    snapshot,
+    validate_timeout,
+)
 from android_fleet.devices.models import Device, DeviceCapability
 from android_fleet.metrics.catalog import valid_metric
 from android_fleet.metrics.models import MetricSnapshot, MetricValue
@@ -114,9 +120,8 @@ class ThermalCollector:
         output = await read_shell(adb, device.serial, ("dumpsys", "thermalservice"), self._timeout)
         values = parse_thermal(output) if output is not None else ()
         if self._sysfs_fallback and not any(v.name == "thermal_temperature" for v in values):
-            output = await read_shell(
-                adb, device.serial, ("sh", "-c", THERMAL_SCRIPT), self._timeout
-            )
+            # Thermal zones are frequently root-only; read_script elevates where available.
+            output = await read_script(adb, device, THERMAL_SCRIPT, self._timeout)
             if output is not None:
                 values += parse_thermal_sysfs(output)
         if values:

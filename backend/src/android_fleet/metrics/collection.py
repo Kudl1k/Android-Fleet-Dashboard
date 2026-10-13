@@ -7,11 +7,15 @@ from android_fleet.adb.base import AdbClient
 from android_fleet.collectors.base import Collector
 from android_fleet.collectors.battery import BatteryCollector
 from android_fleet.collectors.cpu import CpuCollector
+from android_fleet.collectors.cpu_limits import CpuLimitsCollector
+from android_fleet.collectors.gpu import GpuCollector
 from android_fleet.collectors.memory import MemoryCollector
 from android_fleet.collectors.network import NetworkCollector
+from android_fleet.collectors.processes import ProcessCollector
 from android_fleet.collectors.storage import StorageCollector
 from android_fleet.collectors.thermal import ThermalCollector
 from android_fleet.collectors.uptime import UptimeCollector
+from android_fleet.collectors.zram import ZramCollector
 from android_fleet.devices.models import Device
 from android_fleet.metrics.catalog import valid_metric
 from android_fleet.metrics.models import MetricSnapshot, MetricValue
@@ -37,6 +41,10 @@ class MetricPipeline:
                 NetworkCollector(timeout=self.command_timeout),
                 UptimeCollector(timeout=self.command_timeout),
                 ThermalCollector(timeout=self.command_timeout),
+                CpuLimitsCollector(timeout=self.command_timeout),
+                ZramCollector(timeout=self.command_timeout),
+                GpuCollector(timeout=self.command_timeout),
+                ProcessCollector(timeout=self.command_timeout),
             )
         return self._collectors[device_id]
 

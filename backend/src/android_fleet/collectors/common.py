@@ -29,5 +29,18 @@ async def read_shell(
     return result.stdout if result.exit_code == 0 and not result.timeout else None
 
 
+async def read_script(adb: AdbClient, device: Device, script: str, timeout: float) -> str | None:
+    """Run a read-only script, elevated through su where root was observed.
+
+    Rooted devices can expose sysfs/procfs files that SELinux hides from the shell user.
+    A failed or denied su falls back to the unprivileged shell instead of failing.
+    """
+    if DeviceCapability.ROOT_SHELL in device.capabilities:
+        output = await read_shell(adb, device.serial, ("su", "-c", script), timeout)
+        if output is not None and output.strip():
+            return output
+    return await read_shell(adb, device.serial, ("sh", "-c", script), timeout)
+
+
 def snapshot(device: Device, values: tuple[MetricValue, ...] = ()) -> MetricSnapshot:
     return MetricSnapshot(device.id, datetime.now(UTC), tuple(v for v in values if valid_metric(v)))
