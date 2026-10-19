@@ -8,6 +8,8 @@ React Dashboard → REST → Android Manager → ADB → devices
 Android Manager → alert evaluation → SQLite rules/events
 ```
 
+**School assignment (CZ):** root-aware monitoring (ZRAM, GPU, processes, CPU frequency capping, battery capacity, device info), Grafana fleet/device views, phone preparation and small-VM deployment are described in [docs/SCHOOL_ASSIGNMENT.md](docs/SCHOOL_ASSIGNMENT.md); run and test instructions are in [NAVOD.md](NAVOD.md).
+
 Rooted devices may use fixed-port TCP ADB and authorized su. Non-rooted devices may use Wireless Debugging/TLS pairing or USB. Connection method does not establish capabilities: bounded probes observe supported operations independently. Battery, CPU, RAM, storage, network, uptime and available thermal monitoring are implemented. Vendor collectors, terminals and arbitrary command execution remain deferred.
 
 ## Local development

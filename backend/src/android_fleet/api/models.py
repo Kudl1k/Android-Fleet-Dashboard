@@ -51,6 +51,7 @@ class DeviceResponse(BaseModel):
     sdk: int | None
     abi: str | None
     soc: str | None
+    kernel: str | None = None
     root_available: bool | None
     capabilities: set[DeviceCapability]
     last_seen: datetime | None

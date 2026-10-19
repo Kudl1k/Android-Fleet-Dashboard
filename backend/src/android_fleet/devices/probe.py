@@ -33,6 +33,7 @@ class DeviceProbe:
         device.android_version = None
         device.abi = None
         device.soc = None
+        device.kernel = None
         device.sdk = None
         if device.state != DeviceState.ONLINE:
             return device
@@ -47,9 +48,15 @@ class DeviceProbe:
         device.model = values.get("ro.product.model")
         device.android_version = values.get("ro.build.version.release")
         device.abi = values.get("ro.product.cpu.abi")
-        device.soc = values.get("ro.soc.model")
+        # ro.soc.model exists since Android 12; older builds expose only the board platform.
+        device.soc = values.get("ro.soc.model") or values.get("ro.board.platform")
         sdk = values.get("ro.build.version.sdk", "")
         device.sdk = int(sdk) if len(sdk) <= 5 and sdk.isascii() and sdk.isdecimal() else None
+        kernel = await self._shell(device.serial, ("uname", "-r"), timeout=2.0)
+        if kernel.exit_code == 0 and not kernel.timeout:
+            release = kernel.stdout.strip()
+            if release and len(release) <= 128 and release.isprintable():
+                device.kernel = release
         direct = await self._shell(device.serial, ("id", "-u"), timeout=2.0)
         if direct.exit_code == 0 and not direct.timeout and direct.stdout.strip() == "0":
             device.root_available = True

@@ -341,11 +341,22 @@ async def test_storage_accepts_android_data_bind_mount_and_keeps_logical_label()
     assert DeviceCapability.STORAGE_METRICS in target.capabilities
 
 
+def test_storage_accepts_data_mirror_reported_by_pixel_3a_android_12() -> None:
+    output = (
+        "Filesystem       1K-blocks     Used Available Use% Mounted on\n"
+        "/dev/block/dm-34  52389356 16716348  35673008  32% /data_mirror/ref_profiles\n"
+    )
+    values = parse_storage(output)
+    assert {v.name: v.value for v in values}["storage_total"] == 52389356 * 1024
+    assert all(value.labels == (("mount", "/data"),) for value in values)
+
+
 @pytest.mark.parametrize(
     "mount",
     [
         "/system",
         "/database",
+        "/data_mirrorx",
         "/dataevil",
         "/data/../system",
         "/data/./user",
