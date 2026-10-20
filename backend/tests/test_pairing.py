@@ -311,3 +311,251 @@ async def test_connection_requires_online_authorized_device(
             )
             assert result.status_code == 409
             assert not app.state.pairing.verified
+
+
+class TcpAdb(IdentityAdb):
+    failure = ""
+
+    async def enable_tcp(self, serial: str, *, timeout: float = 10) -> CommandResult:
+        if self.failure == "transport":
+            raise OSError("private device output")
+        if self.failure == "timeout":
+            return CommandResult(timeout=True)
+        if self.failure == "unsupported":
+            return CommandResult(exit_code=1, stderr="private device output")
+        result = await super().enable_tcp(serial, timeout=timeout)
+        if self.failure == "unauthorized":
+            self.endpoints[f"{HOST}:5555"] = DeviceState.UNAUTHORIZED
+        return result
+
+    async def shell(
+        self, serial: str, argv: tuple[str, ...], *, timeout: float = 10
+    ) -> CommandResult:
+        result = await super().shell(serial, argv, timeout=timeout)
+        if self.failure == "identity" and serial.endswith(":5555") and argv == ("getprop",):
+            return CommandResult(stdout="[ro.serialno]: [different-device]\n")
+        return result
+
+
+@pytest.mark.parametrize("rooted", [False, True])
+async def test_switch_to_tcp_preserves_registration_and_history(
+    tmp_path: Path, rooted: bool
+) -> None:
+    from android_fleet.devices.models import ConnectionType
+    from android_fleet.devices.registry_models import DeviceRegistration
+
+    adb = TcpAdb()
+    adb.endpoints[f"{HOST}:37000"] = DeviceState.ONLINE
+    app = app_for(tmp_path, adb)
+    async with app.router.lifespan_context(app):
+        fleet = app.state.fleet
+        device = await fleet.register(
+            DeviceRegistration(
+                "Android",
+                ConnectionType.WIRELESS_ADB,
+                HOST,
+                37000,
+                metadata={"wireless_identity": adb.identity},
+            )
+        )
+        device.root_available = rooted
+        original = fleet.configs[device.id]
+        generation = fleet.observation_generation(device.id)
+        async with AsyncClient(
+            transport=ASGITransport(app), base_url="http://test", headers=ADMIN
+        ) as client:
+            switched = await client.post(f"/api/v1/devices/{device.id}/adb-tcp")
+            assert switched.status_code == 200, switched.text
+            assert switched.json() == {"id": device.id, "port": 5555, "state": "online"}
+            config = fleet.configs[device.id]
+            assert config.connection_type == ConnectionType.ADB_TCP
+            assert config.name == original.name and config.metadata == original.metadata
+            assert config.created_at == original.created_at and config.auto_connect
+            assert len(await fleet.registry.list()) == 1
+            assert fleet.observation_generation(device.id) > generation
+            assert fleet.devices[device.id].serial == f"{HOST}:5555"
+            assert (f"{HOST}:37000", ("tcpip", "5555")) in adb.calls
+            assert "device.adb_tcp" in (await client.get("/api/v1/audit")).text
+    restarted = app_for(tmp_path, adb)
+    async with restarted.router.lifespan_context(restarted):
+        assert restarted.state.fleet.configs[device.id].port == 5555
+
+
+@pytest.mark.parametrize(
+    "failure", ["timeout", "unsupported", "unauthorized", "identity", "transport"]
+)
+async def test_switch_to_tcp_failure_preserves_config_and_invalidates_state(
+    tmp_path: Path,
+    failure: str,
+) -> None:
+    from android_fleet.devices.models import ConnectionType
+    from android_fleet.devices.registry_models import DeviceRegistration
+
+    adb = TcpAdb()
+    adb.endpoints[f"{HOST}:37000"] = DeviceState.ONLINE
+    app = app_for(tmp_path, adb)
+    async with app.router.lifespan_context(app):
+        fleet = app.state.fleet
+        device = await fleet.register(
+            DeviceRegistration("Android", ConnectionType.WIRELESS_ADB, HOST, 37000)
+        )
+        adb.failure = failure
+        async with AsyncClient(
+            transport=ASGITransport(app), base_url="http://test", headers=ADMIN
+        ) as client:
+            response = await client.post(f"/api/v1/devices/{device.id}/adb-tcp")
+            assert response.status_code == 409
+            assert "private device output" not in response.text
+            assert (await fleet.registry.get(device.id)).port == 37000
+            assert not fleet.devices[device.id].capabilities
+            assert device.id not in fleet.snapshots
+            if failure == "identity":
+                assert f"{HOST}:5555" not in adb.devices
+
+
+async def test_tcp_switch_requires_auth_online_device_and_approved_host(tmp_path: Path) -> None:
+    from android_fleet.devices.models import ConnectionType
+    from android_fleet.devices.registry_models import DeviceRegistration
+
+    adb = TcpAdb()
+    adb.endpoints[f"{HOST}:37000"] = DeviceState.ONLINE
+    app = app_for(tmp_path, adb)
+    async with app.router.lifespan_context(app):
+        fleet = app.state.fleet
+        device = await fleet.register(
+            DeviceRegistration("Android", ConnectionType.WIRELESS_ADB, HOST, 37000)
+        )
+        path = f"/api/v1/devices/{device.id}/adb-tcp"
+        async with AsyncClient(transport=ASGITransport(app), base_url="http://test") as client:
+            assert (await client.post(path)).status_code == 401
+            fleet.devices[device.id].state = DeviceState.OFFLINE
+            assert (await client.post(path, headers=ADMIN)).status_code == 409
+            fleet.devices[device.id].state = DeviceState.ONLINE
+            app.state.pairing.approved_networks.clear()
+            assert (await client.post(path, headers=ADMIN)).status_code == 403
+            assert not any(command == ("tcpip", "5555") for _, command in adb.calls)
+
+
+async def test_tcp_switch_rejects_duplicate_before_device_mutation(tmp_path: Path) -> None:
+    from android_fleet.devices.models import ConnectionType
+    from android_fleet.devices.registry_models import DeviceRegistration
+
+    adb = TcpAdb()
+    adb.endpoints[f"{HOST}:37000"] = DeviceState.ONLINE
+    app = app_for(tmp_path, adb)
+    async with app.router.lifespan_context(app):
+        fleet = app.state.fleet
+        source = await fleet.register(
+            DeviceRegistration("Wireless", ConnectionType.WIRELESS_ADB, HOST, 37000)
+        )
+        await fleet.register(DeviceRegistration("TCP", ConnectionType.ADB_TCP, HOST, 5555))
+        async with AsyncClient(
+            transport=ASGITransport(app), base_url="http://test", headers=ADMIN
+        ) as client:
+            response = await client.post(f"/api/v1/devices/{source.id}/adb-tcp")
+            assert response.status_code == 409 and "duplicate" in response.text
+            assert not any(command == ("tcpip", "5555") for _, command in adb.calls)
+
+
+async def test_tcp_switch_cancellation_invalidates_observations(tmp_path: Path) -> None:
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from android_fleet.devices.models import ConnectionType
+    from android_fleet.devices.registry_models import DeviceRegistration
+
+    adb = TcpAdb()
+    adb.endpoints[f"{HOST}:37000"] = DeviceState.ONLINE
+    app = app_for(tmp_path, adb)
+    async with app.router.lifespan_context(app):
+        fleet = app.state.fleet
+        device = await fleet.register(
+            DeviceRegistration("Wireless", ConnectionType.WIRELESS_ADB, HOST, 37000)
+        )
+        entered = asyncio.Event()
+
+        async def blocked(*args: object, **kwargs: object) -> CommandResult:
+            entered.set()
+            await asyncio.Event().wait()
+            return CommandResult()
+
+        adb.enable_tcp = AsyncMock(side_effect=blocked)  # type: ignore[method-assign]
+        task = asyncio.create_task(fleet.switch_to_tcp(device.id))
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert (await fleet.registry.get(device.id)).port == 37000
+        assert fleet.devices[device.id].state == DeviceState.OFFLINE
+        assert not fleet.devices[device.id].capabilities
+        assert device.id not in fleet.snapshots
+
+
+async def test_tcp_switch_requires_stable_source_identity(tmp_path: Path) -> None:
+    from android_fleet.devices.models import ConnectionType
+    from android_fleet.devices.registry_models import DeviceRegistration
+
+    adb = FakeAdbClient()
+    adb.endpoints[f"{HOST}:37000"] = DeviceState.ONLINE
+    app = app_for(tmp_path, adb)
+    async with app.router.lifespan_context(app):
+        device = await app.state.fleet.register(
+            DeviceRegistration("Wireless", ConnectionType.WIRELESS_ADB, HOST, 37000)
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app), base_url="http://test", headers=ADMIN
+        ) as client:
+            response = await client.post(f"/api/v1/devices/{device.id}/adb-tcp")
+            assert response.status_code == 409 and "identity" in response.text
+            assert not any(command == ("tcpip", "5555") for _, command in adb.calls)
+
+
+class RestartingTcpAdb(TcpAdb):
+    tcp_probes = 0
+    persistent_failure = False
+
+    async def shell(
+        self, serial: str, argv: tuple[str, ...], *, timeout: float = 10
+    ) -> CommandResult:
+        if serial.endswith(":5555") and argv == ("getprop",):
+            self.tcp_probes += 1
+            # Identity verification succeeds, but the subsequent capability probe
+            # encounters adbd's transient restart window.
+            if self.tcp_probes == 2 or (self.persistent_failure and self.tcp_probes > 1):
+                return CommandResult(exit_code=1, stderr="error: closed")
+        return await super().shell(serial, argv, timeout=timeout)
+
+
+@pytest.mark.parametrize("persistent", [False, True])
+async def test_tcp_switch_waits_for_capability_probe_and_reports_failure(
+    tmp_path: Path,
+    persistent: bool,
+) -> None:
+    from android_fleet.devices.models import ConnectionType, DeviceCapability
+    from android_fleet.devices.registry_models import DeviceRegistration
+
+    adb = RestartingTcpAdb()
+    adb.persistent_failure = persistent
+    adb.endpoints[f"{HOST}:37000"] = DeviceState.ONLINE
+    app = app_for(tmp_path, adb)
+    async with app.router.lifespan_context(app):
+        fleet = app.state.fleet
+        device = await fleet.register(
+            DeviceRegistration("Android", ConnectionType.WIRELESS_ADB, HOST, 37000)
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app), base_url="http://test", headers=ADMIN
+        ) as client:
+            response = await client.post(f"/api/v1/devices/{device.id}/adb-tcp")
+            config = await fleet.registry.get(device.id)
+            assert config.port == 5555 and config.connection_type == ConnectionType.ADB_TCP
+            if persistent:
+                assert response.status_code == 409
+                assert "ADB TCP is enabled" in response.text and "Reconnect" in response.text
+                assert not fleet.devices[device.id].capabilities
+                assert device.id not in fleet.snapshots
+            else:
+                assert response.status_code == 200 and response.json()["state"] == "online"
+                assert DeviceCapability.ADB_SHELL in fleet.devices[device.id].capabilities
+                assert fleet.observations[device.id].error_code is None
+                assert adb.tcp_probes >= 3

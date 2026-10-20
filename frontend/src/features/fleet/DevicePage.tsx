@@ -1,3 +1,5 @@
+import AdbTcpSwitch from "../management/AdbTcpSwitch";
+import DeviceSetup from "../control/DeviceSetup";
 import DeviceControl from "../control/DeviceControl";
 import LiveScreen from "../screen/LiveScreen";
 import TerminalPanel from "../terminal/TerminalPanel";
@@ -220,6 +222,7 @@ export default function DevicePage() {
                     Manage device
                 </Link>
             </div>
+            {d.connection_type === "wireless_adb" && <AdbTcpSwitch id={id} online={d.state === "online"} />}
             <div className="panel freshness">
                 <span
                     className={`status-dot ${d.state === "online" && !metrics.isError && metrics.data?.observed_at && !metrics.data.stale ? "online" : "degraded"}`}
@@ -419,6 +422,7 @@ export default function DevicePage() {
                     </div>
                 </section>
             </div>
+            <DeviceSetup id={id} online={d.state === "online"} />
             <DeviceControl id={id} online={d.state === "online"} />
             <LiveScreen key={id} id={id} online={d.state === "online"} />
             <TerminalPanel key={`terminal-${id}`} deviceId={id} online={d.state === "online"} />

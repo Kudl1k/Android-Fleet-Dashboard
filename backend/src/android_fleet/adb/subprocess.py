@@ -227,6 +227,19 @@ class SubprocessAdbClient:
             raise RuntimeError("Invalid forwarded port")
         return port
 
+    async def forward_ssh(self, serial: str) -> int:
+        if not serial or serial.startswith("-"):
+            raise ValueError("Invalid ADB serial")
+        if len(self._prefix) != 3:
+            raise RuntimeError("Termux SSH verification requires a container-local ADB server")
+        result = await self._run(["-s", serial, "forward", "tcp:0", "tcp:8022"], 10)
+        if result.timeout or result.exit_code != 0 or not result.stdout.strip().isdigit():
+            raise RuntimeError("Unable to create SSH forwarding")
+        port = int(result.stdout.strip())
+        if not 1 <= port <= 65535:
+            raise RuntimeError("Invalid forwarded port")
+        return port
+
     async def list_forwards(self) -> tuple[tuple[str, str, str], ...]:
         result = await self._run(["forward", "--list"], 10.0)
         if result.timeout or result.exit_code != 0:
@@ -348,6 +361,11 @@ class SubprocessAdbClient:
                 while await process.stdout.read(65536):
                     pass
                 await process.wait()
+
+    async def enable_tcp(self, serial: str, *, timeout: float = 10) -> CommandResult:
+        if not serial or serial.startswith("-"):
+            raise ValueError("Invalid ADB serial")
+        return await self._run(["-s", serial, "tcpip", "5555"], timeout)
 
     async def connect(self, address: str) -> CommandResult:
         if not address or address.startswith("-"):

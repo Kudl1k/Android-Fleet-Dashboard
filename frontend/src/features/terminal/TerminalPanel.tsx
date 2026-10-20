@@ -50,8 +50,15 @@ function TerminalTab({target,onClose}:{target:Target;onClose:()=>void}) {
 }
 export default function TerminalPanel({deviceId,online=true,initialProfile}:{deviceId?:string;online?:boolean;initialProfile?:SSHProfile}) {
  const auth=useAuth();const canSSH=auth.can("terminal:ssh");const [tabs,setTabs]=useState<Tab[]>([]);const [active,setActive]=useState("");const [profiles,setProfiles]=useState<SSHProfile[]>([]);const [profile,setProfile]=useState(initialProfile?.id??"");const [error,setError]=useState("");
- useEffect(()=>{if(canSSH)void request<SSHProfile[]>("/api/v1/ssh/profiles").then(setProfiles).catch(err=>setError(err.message));},[canSSH]);
- const open=(target:Target,name:string)=>{const key=crypto.randomUUID();setTabs([...tabs,{key,target,name}]);setActive(key);};
+ useEffect(()=>{
+  if(!canSSH)return;
+  const controller=new AbortController();
+  const load=()=>{void request<SSHProfile[]>("/api/v1/ssh/profiles",{signal:controller.signal}).then(profiles=>{if(!controller.signal.aborted){setProfiles(profiles);setError("");}}).catch(err=>{if(!controller.signal.aborted)setError(err.message);});};
+  load();const timer=setInterval(load,10000);
+  return()=>{controller.abort();clearInterval(timer);};
+ },[canSSH]);
+ const nextTabId=useRef(0);
+ const open=(target:Target,name:string)=>{const key=String(nextTabId.current++);setTabs(current=>[...current,{key,target,name}]);setActive(key);};
  if(!auth.can("terminal:view"))return null;
  return <section className="panel terminal-panel"><h2>Terminal</h2><p className="muted">Interactive access is privileged. Sessions start only when you open a tab. Ctrl+Shift+C copies selection; Ctrl+Shift+L clears output.</p><div className="actions">{deviceId&&<button disabled={!auth.can("terminal:adb")||!online} onClick={()=>open({connection_type:"adb",device_id:deviceId},"ADB Shell")}>Open ADB Shell</button>}{auth.can("terminal:ssh")&&<><select aria-label="SSH connection" value={profile} onChange={e=>setProfile(e.target.value)}><option value="">Select SSH connection</option>{(initialProfile?[initialProfile,...profiles.filter(p=>p.id!==initialProfile.id)]:profiles).filter(p=>p.enabled&&(!deviceId||!p.device_id||p.device_id===deviceId)).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><button disabled={!profile} onClick={()=>open({connection_type:"ssh",profile_id:profile},profiles.find(p=>p.id===profile)?.name??initialProfile?.name??"SSH")}>Open SSH</button></>}</div>{error&&<p className="error" role="alert">{error}</p>}<div role="tablist" aria-label="Terminal sessions">{tabs.map(tab=><button role="tab" aria-selected={active===tab.key} key={tab.key} onClick={()=>setActive(tab.key)}>{tab.name}</button>)}</div>{tabs.map(tab=><div key={tab.key} hidden={active!==tab.key}><TerminalTab target={tab.target} onClose={()=>{setTabs(tabs.filter(t=>t.key!==tab.key));if(active===tab.key)setActive(tabs.find(t=>t.key!==tab.key)?.key??"");}}/></div>)}{!tabs.length&&<p className="muted">No terminal sessions. ADB Shell must first be enabled by an administrator.</p>}</section>;
 }

@@ -7,6 +7,7 @@ import { PollContext } from "../../lib/hooks";
 import { useToast } from "../../lib/toast";
 import Confirmation from "./Confirmation";
 import PairingWizard, { WirelessPortUpdate } from "./PairingWizard";
+import AdbTcpSwitch from "./AdbTcpSwitch";
 import PairingNetworkSettings from "./PairingNetworkSettings";
 import "./management.css";
 
@@ -296,6 +297,7 @@ export default function ManagementPage() {
                                     </td>
                                     <td>
                                         {can("device.manage") && device.connection_type === "wireless_adb" && device.host && <WirelessPortUpdate id={device.id} host={device.host} port={device.port} />}
+                                        {device.connection_type === "wireless_adb" && <AdbTcpSwitch id={device.id} online={device.state === "online"} />}
                                         <button
                                             className="button"
                                             disabled={disabled}

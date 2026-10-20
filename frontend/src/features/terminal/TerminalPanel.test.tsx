@@ -31,3 +31,16 @@ it("awaits previous session cleanup before reconnecting at capacity",async()=>{
  finishCleanup();await waitFor(()=>expect(connections).toHaveLength(2));
  expect(vi.mocked(request).mock.calls.filter(call=>call[0]==="/api/v1/terminal/sessions")).toHaveLength(2);
 });
+
+
+it("opens independent tabs over HTTP without crypto.randomUUID",async()=>{
+ vi.stubGlobal("crypto",{});
+ render(<TerminalPanel deviceId="d1"/>);
+ fireEvent.click(screen.getByText("Open ADB Shell"));
+ await waitFor(()=>expect(connections).toHaveLength(1));
+ fireEvent.click(screen.getByText("Open ADB Shell"));
+ await waitFor(()=>expect(connections).toHaveLength(2));
+ expect(screen.getAllByRole("tab")).toHaveLength(2);
+ fireEvent.click(screen.getAllByText("Close session")[0]);
+ expect(screen.getAllByRole("tab")).toHaveLength(1);
+});

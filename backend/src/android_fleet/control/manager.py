@@ -10,15 +10,21 @@ import time
 import uuid
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from android_fleet.setup.service import DeviceSetup
 
 from android_fleet.adb.base import AdbClient
 from android_fleet.core.settings import Settings
 from android_fleet.devices.models import DeviceState
 from android_fleet.devices.service import FleetService
 from android_fleet.security import ROLE_PERMISSIONS, Actor
+from android_fleet.setup.catalog import SetupError
 
 PERMISSIONS = {
+    "setup.termux": "terminal:profile:manage",
+    "setup.ssh": "terminal:profile:manage",
     **dict.fromkeys(("state", "properties", "apps.list", "apps.inspect"), "control.inspect"),
     **dict.fromkeys(("screen.wake", "screen.lock", "screenshot"), "control.screen"),
     "reboot": "control.reboot",
@@ -34,7 +40,14 @@ PROPERTIES = (
     "ro.product.cpu.abi",
     "ro.boot.bootloader",
 )
-DESTRUCTIVE = {"reboot", "reboot.recovery", "reboot.bootloader", "apps.uninstall"}
+DESTRUCTIVE = {
+    "setup.termux",
+    "setup.ssh",
+    "reboot",
+    "reboot.recovery",
+    "reboot.bootloader",
+    "apps.uninstall",
+}
 NONCANCELLABLE = DESTRUCTIVE | {"apps.install", "apps.stop", "apps.launch"}
 
 
@@ -117,9 +130,15 @@ def validate_manifest(data: bytes) -> None:
 
 class Manager:
     def __init__(
-        self, client: AdbClient, fleet: FleetService, settings: Settings, path: Path
+        self,
+        client: AdbClient,
+        fleet: FleetService,
+        settings: Settings,
+        path: Path,
+        setup: "DeviceSetup | None" = None,
     ) -> None:
         self.client, self.fleet, self.settings = client, fleet, settings
+        self.setup = setup
         self.path = Path(path)
         self.artifacts = self.path.parent / "control-artifacts"
         self.db: sqlite3.Connection | None = None
@@ -318,10 +337,30 @@ class Manager:
                 self.save(op)
                 async with asyncio.timeout(
                     self.settings.operations_timeouts.get(
-                        op["action"], self.settings.operations_timeout_seconds
+                        op["action"],
+                        600
+                        if op["action"].startswith("setup.")
+                        else self.settings.operations_timeout_seconds,
                     )
                 ):
-                    op["result"] = await self.execute(op, package, property, apk)
+                    if op["action"].startswith("setup."):
+                        if self.setup is None:
+                            raise SetupError("Device setup is unavailable")
+                        if self.security:
+                            await self.security.authorize_device(
+                                actor, op["device_id"], "apps.install"
+                            )
+                            await self.security.authorize_device(
+                                actor, op["device_id"], "terminal:profile:manage"
+                            )
+
+                        def progress(stage: str) -> None:
+                            op["result"] = {"stage": stage}
+                            self.save(op)
+
+                        op["result"] = await self.setup.run(op["device_id"], op["action"], progress)
+                    else:
+                        op["result"] = await self.execute(op, package, property, apk)
                 op["state"] = "succeeded"
         except asyncio.CancelledError:
             op.update(
@@ -333,6 +372,8 @@ class Manager:
                 state="timed_out",
                 error="Execution timeout; device effects may already have occurred",
             )
+        except SetupError as error:
+            op.update(state="failed", error=str(error))
         except Exception as error:
             safe_errors = {
                 "Device is offline": "Device is offline; reconnect before retrying",

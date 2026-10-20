@@ -82,6 +82,10 @@ class ProfileService:
                     "(id TEXT PRIMARY KEY, profile TEXT NOT NULL, secret BLOB NOT NULL, "
                     "host_key TEXT)"
                 )
+                db.execute(
+                    "CREATE TABLE IF NOT EXISTS termux_destinations "
+                    "(device_id TEXT PRIMARY KEY, host TEXT NOT NULL)"
+                )
             self.path.chmod(0o600)
 
         await asyncio.to_thread(init)
@@ -110,7 +114,16 @@ class ProfileService:
 
     async def destination(self, profile: ProfileInput) -> str:
         if f"{profile.host}:{profile.port}" not in self.destinations:
-            raise HTTPException(403, "SSH destination is not approved")
+            approved = bool(
+                profile.device_id
+                and profile.port == 8022
+                and await self._query(
+                    "SELECT 1 FROM termux_destinations WHERE device_id=? AND host=?",
+                    (profile.device_id, profile.host),
+                )
+            )
+            if not approved:
+                raise HTTPException(403, "SSH destination is not approved")
         if profile.port in {2375, 2376, 5037}:
             raise HTTPException(403, "SSH destination port is prohibited")
         loop = asyncio.get_running_loop()
@@ -151,7 +164,13 @@ class ProfileService:
         async with self._mutation_lock:
             return await self._save(body, profile_id)
 
-    async def _save(self, body: ProfileInput, profile_id: str | None = None) -> Profile:
+    async def _save(
+        self,
+        body: ProfileInput,
+        profile_id: str | None = None,
+        *,
+        new_id: str | None = None,
+    ) -> Profile:
         address = await self.destination(body)
         if self.cipher is None:
             raise HTTPException(503, "SSH encryption key is not configured")
@@ -160,7 +179,7 @@ class ProfileService:
             raise HTTPException(422, "SSH credential required")
         if old and body.auth_method != old.auth_method and not body.credential:
             raise HTTPException(422, "Replacement credential required")
-        pid = profile_id or str(uuid.uuid4())
+        pid = profile_id or new_id or str(uuid.uuid4())
         profile = Profile(
             **body.model_dump(exclude={"credential"}),
             id=pid,
@@ -194,6 +213,82 @@ class ProfileService:
             (pid, profile.model_dump_json(), secret, key),
         )
         return profile
+
+    @staticmethod
+    def validate_termux_host(host: str) -> None:
+        try:
+            address = ipaddress.ip_address(host)
+            if (
+                not any(
+                    address in ipaddress.ip_network(net)
+                    for net in (
+                        "10.0.0.0/8",
+                        "172.16.0.0/12",
+                        "192.168.0.0/16",
+                        "fc00::/7",
+                    )
+                )
+                or "%" in host
+            ):
+                raise ValueError
+        except ValueError as exc:
+            raise HTTPException(403, "Termux setup requires a private LAN IP address") from exc
+
+    async def prepare_termux(
+        self,
+        device_id: str,
+        host: str,
+        name: str,
+        username: str,
+    ) -> Profile:
+        """Explicit setup authorizes one device's port 8022, with an encrypted key."""
+        import asyncssh
+
+        self.validate_termux_host(host)
+        async with self._mutation_lock:
+            if self.cipher is None:
+                raise HTTPException(503, "SSH encryption key is not configured")
+            pid = str(uuid.uuid5(uuid.NAMESPACE_URL, "android-fleet:termux:" + device_id))
+            rows = await self._query("SELECT profile FROM ssh_profiles WHERE id=?", (pid,))
+            old = Profile.model_validate_json(rows[0][0]) if rows else None
+            secret = (
+                None
+                if old
+                else SecretStr(
+                    asyncssh.generate_private_key("ssh-ed25519").export_private_key().decode()
+                )
+            )
+            await self._query(
+                "INSERT OR REPLACE INTO termux_destinations VALUES(?,?)",
+                (device_id, host),
+            )
+            return await self._save(
+                ProfileInput(
+                    name=("Termux SSH · " + name)[:100],
+                    host=host,
+                    port=8022,
+                    username=username,
+                    auth_method="key",
+                    device_id=device_id,
+                    enabled=False,
+                    allowed_identities=old.allowed_identities if old else [],
+                    credential=secret,
+                ),
+                pid if old else None,
+                new_id=pid,
+            )
+
+    async def complete_termux(self, profile_id: str, key: Any) -> None:
+        """Pin a host key already verified through the authenticated ADB tunnel."""
+        async with self._mutation_lock:
+            profile = await self.get(profile_id)
+            profile.enabled = True
+            profile.fingerprint = key.get_fingerprint("sha256")
+            profile.updated_at = time.time()
+            await self._query(
+                "UPDATE ssh_profiles SET profile=?,host_key=? WHERE id=?",
+                (profile.model_dump_json(), key.export_public_key().decode(), profile_id),
+            )
 
     async def credentials(self, profile: Profile) -> str:
         async with self._mutation_lock:

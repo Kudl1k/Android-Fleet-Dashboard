@@ -31,6 +31,9 @@ def router(manager: Manager, security: Any) -> APIRouter:
             body.action if body.action in PERMISSIONS else "control.unknown"
         )
         actor = await security.authorize(request, PERMISSIONS.get(body.action, "control.unknown"))
+        if body.action.startswith("setup."):
+            await security.authorize_device(actor, device_id, "apps.install")
+            await security.authorize_device(actor, device_id, "terminal:profile:manage")
         try:
             op = await manager.submit(
                 device_id,

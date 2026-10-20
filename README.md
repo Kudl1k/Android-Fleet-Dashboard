@@ -69,3 +69,64 @@ acknowledgement and history. Enter a control token only for the current tab sess
 the UI never stores it in browser storage. See [frontend setup](frontend/README.md),
 [alert configuration](docs/ALERTING.md), [deployment](docs/DOCKER.md) and
 [M3 validation](docs/M3_VALIDATION.md) for actual checks and acceptance limits.
+
+### Switch a paired device to ADB TCP
+
+After pairing, connecting and registering a Wireless Debugging device, an administrator
+can click **Switch to ADB TCP** in its device page or Device management. Confirm
+**Enable TCP and reconnect** to enable port 5555, verify the same Android serial,
+and update the existing registration while preserving its ID, name and history.
+The device must be online with ADB shell capability and its private IP must be
+approved in Wireless Debugging network access. No root, APK or manual command is required.
+
+Switching may close active shells. TCP mode may need enabling again after reboot;
+use only trusted networks. If enabling, reconnecting or identity verification fails,
+the original registration remains unchanged and stale observations are invalidated.
+Reconnect Wireless Debugging before retrying. If port 5555 already has a separate
+registration, remove the duplicate before switching.
+
+After changing transport, the switch waits briefly for the full shell capability
+probe to recover from an ADB restart. If the verified TCP endpoint is saved but
+the shell remains unavailable, the error explicitly says TCP is enabled and asks
+you to click **Reconnect**; pairing again is unnecessary.
+
+### Optional F-Droid, Termux and SSH setup
+
+Administrators can open a device page and choose **Install F-Droid, Termux & SSH**.
+Confirm the operation and leave the phone unlocked with Termux in the foreground.
+Approve Android's initial prompts and let the first Termux shell finish opening.
+The queued operation displays progress in Device Control. If initialization or a
+permission prompt interrupted it, open an idle Termux shell and choose
+**Enable Termux SSH** to resume without reinstalling apps or typing commands.
+
+Setup installs missing apps from checksum-pinned official F-Droid artifacts:
+F-Droid 1.23.2 and Termux 0.118.3. Existing apps and data are preserved; setup never
+uninstalls conflicting APK signatures. Termux's universal APK is approximately
+109 MiB, so this fixed catalog uses a separate 128 MiB bound without increasing
+the general APK upload limit. Downloads require backend internet access; OpenSSH
+package installation also requires internet on the device. No helper APK,
+external-app command permission or root is used. Primary Android user 0 and a
+container-local ADB server are currently required.
+
+Configure the existing `ANDROID_FLEET_SSH_ENCRYPTION_KEY` with a persistent Fernet
+key before using setup. Managed Ed25519 private keys are encrypted by the existing
+SSH profile store and reused on retries. Setup explicitly authorizes only that
+device's private IP on TCP 8022. It configures public-key-only SSH and restarts
+Termux SSH, closing its existing sessions. ADB establishes the host-key trust
+anchor before a real key-authenticated LAN login is verified. Only then is the
+SSH profile enabled; select **Termux SSH · device name** in the Terminal panel
+(the list refreshes within ten seconds).
+
+The setup script is typed into Termux through authenticated ADB. Do not type or
+switch apps while it runs. Commands are submitted only while Termux owns the
+foreground window. Work is serialized with other per-device control operations,
+has a ten-minute default budget (overridable with `setup.termux` / `setup.ssh` in
+`ANDROID_FLEET_OPERATIONS_TIMEOUTS`), and is not replayed after backend restart.
+Partial app installations or a running device-side script may remain after an
+interruption; retrying reuses the managed key. SSH is optional and independent
+of all fleet monitoring. Android can stop Termux in the background or after reboot;
+boot-time startup and battery-policy changes are not configured by this feature.
+
+Artifact metadata: https://f-droid.org/repo/index-v2.json; upstream setup details:
+https://github.com/termux/termux-app#installation and
+https://github.com/termux/termux-packages/tree/master/packages/openssh.

@@ -79,6 +79,10 @@ class FakeAdbClient:
     async def forward(self, serial: str, socket: str) -> int:
         raise RuntimeError("Live video unavailable on fake devices")
 
+    async def forward_ssh(self, serial: str) -> int:
+        self.calls.append((serial, ("forward", "tcp:0", "tcp:8022")))
+        return 19022
+
     async def list_forwards(self) -> tuple[tuple[str, str, str], ...]:
         return ()
 
@@ -217,6 +221,15 @@ class FakeAdbClient:
         return base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
         )
+
+    async def enable_tcp(self, serial: str, *, timeout: float = 10) -> CommandResult:
+        self.calls.append((serial, ("tcpip", "5555")))
+        if self.devices.get(serial) != DeviceState.ONLINE:
+            return CommandResult(exit_code=1)
+        host = serial.rsplit(":", 1)[0]
+        self.endpoints[f"{host}:5555"] = DeviceState.ONLINE
+        self.devices[serial] = DeviceState.OFFLINE
+        return CommandResult(stdout="restarting in TCP mode port: 5555\n")
 
     async def connect(self, address: str) -> CommandResult:
         self.connection_calls.append(address)

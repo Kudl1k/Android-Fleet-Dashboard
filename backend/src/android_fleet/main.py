@@ -51,6 +51,7 @@ from android_fleet.screen.api import router as screen_router
 from android_fleet.screen.manager import ScreenManager
 from android_fleet.screen.metrics import render_screen_metrics
 from android_fleet.security import SecurityService
+from android_fleet.setup.service import DeviceSetup
 from android_fleet.terminal.api import router as terminal_router
 from android_fleet.terminal.manager import TerminalManager
 from android_fleet.terminal.metrics import render as render_terminal_metrics
@@ -150,6 +151,7 @@ def create_app(
         Path(configuration.operations_path)
         if configuration.operations_path
         else state_directory / "operations.sqlite3",
+        setup=DeviceSetup(client, service, profiles, state_directory / "control-artifacts"),
     )
     alert_store = AlertStore(alert_path)
     alert_engine = AlertEngine(

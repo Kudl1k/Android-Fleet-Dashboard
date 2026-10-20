@@ -379,4 +379,29 @@ class PairingService:
             )
             return {"id": device.id, "port": body.port, "state": device.state}
 
+        @router.post("/devices/{device_id}/adb-tcp")
+        async def switch_tcp(device_id: str, request: Request) -> dict[str, Any]:
+            actor = await admin(request)
+            await self.security.authorize_device(actor, device_id, "device.manage")
+            outcome = "failed"
+            try:
+                config = await self.fleet.registry.get(device_id)
+                if config.host is None:
+                    raise HTTPException(409, "Wireless Debugging device required")
+                self.destination(Endpoint(host=config.host, port=5555))
+                self.rate_limit(actor)
+                async with self.lock:
+                    device = await self.fleet.switch_to_tcp(device_id)
+                outcome = "succeeded"
+                return {"id": device.id, "port": 5555, "state": device.state}
+            finally:
+                await self.security.audit(
+                    actor,
+                    device_id,
+                    "device.adb_tcp",
+                    str(uuid.uuid4()),
+                    "allowed",
+                    outcome,
+                )
+
         return router

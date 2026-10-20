@@ -9,8 +9,8 @@ from time import monotonic
 from android_fleet.adb.base import AdbClient
 from android_fleet.adb.connection import ConnectionManager
 from android_fleet.adb.connection_models import ConnectionObservation
-from android_fleet.devices.models import ConnectionType, Device, DeviceState
-from android_fleet.devices.probe import DeviceProbe
+from android_fleet.devices.models import ConnectionType, Device, DeviceCapability, DeviceState
+from android_fleet.devices.probe import DeviceProbe, parse_getprop
 from android_fleet.devices.registry import DeviceNotFound, SQLiteDeviceRegistry
 from android_fleet.devices.registry_models import DeviceRegistration, RegisteredDevice
 from android_fleet.discovery.models import DiscoveredDevice, DiscoverySnapshot
@@ -345,6 +345,129 @@ class FleetService:
             result = self.get(device_id)
         await self.collect_metrics()
         return result
+
+    async def switch_to_tcp(self, device_id: str) -> Device:
+        """Move an authorized wireless transport to TCP, retaining its registry identity."""
+        async with self._lock:
+            config = await self.registry.get(device_id)
+            device = self.get(device_id)
+            if config.connection_type != ConnectionType.WIRELESS_ADB or config.host is None:
+                raise DeviceUnavailable("A registered Wireless Debugging device is required")
+            if (
+                device.state != DeviceState.ONLINE
+                or DeviceCapability.ADB_SHELL not in device.capabilities
+            ):
+                raise DeviceUnavailable("Connect and authorize the wireless device first")
+            address = f"[{config.host}]:5555" if ":" in config.host else f"{config.host}:5555"
+            if any(c.id != device_id and c.address == address for c in await self.registry.list()):
+                raise DeviceUnavailable(
+                    "Port 5555 is already registered; remove the duplicate first"
+                )
+            invalidated = False
+            try:
+                async with asyncio.timeout(20):
+                    if (await self.adb.list_devices()).get(device.serial) != DeviceState.ONLINE:
+                        raise DeviceUnavailable("Device is offline or unauthorized")
+                    source = await self.adb.shell(device.serial, ("getprop",), timeout=5)
+                    properties = parse_getprop(source.stdout)
+                    identity = properties.get("ro.serialno") or properties.get("ro.boot.serialno")
+                    if source.timeout or source.exit_code != 0 or not identity:
+                        raise DeviceUnavailable(
+                            "Cannot verify device identity; TCP mode was not changed"
+                        )
+                    registered_identity = config.metadata.get("wireless_identity")
+                    if registered_identity and registered_identity != identity:
+                        raise DeviceUnavailable(
+                            "Wireless device identity changed; TCP mode was not changed"
+                        )
+                    self._invalidate_metrics(device_id)
+                    self._probed_at.pop(device_id, None)
+                    pending = ConnectionObservation(device_id, DeviceState.CONNECTING)
+                    self.devices[device_id] = self._device(config, pending)
+                    self.observations[device_id] = pending
+                    invalidated = True
+                    result = await self.adb.enable_tcp(device.serial, timeout=5)
+                    if result.timeout:
+                        raise TimeoutError
+                    if result.exit_code != 0:
+                        raise DeviceUnavailable("Device could not enable ADB TCP mode")
+                    for attempt in range(5):
+                        if attempt:
+                            await asyncio.sleep(0.5)
+                        await self.adb.connect(address)
+                        if (await self.adb.list_devices()).get(address) == DeviceState.ONLINE:
+                            break
+                    else:
+                        raise DeviceUnavailable(
+                            "TCP port 5555 is not authorized or reachable. "
+                            "Registration is unchanged; reconnect Wireless Debugging to retry."
+                        )
+                    target = await self.adb.shell(address, ("getprop",), timeout=5)
+                    target_properties = parse_getprop(target.stdout)
+                    target_identity = target_properties.get("ro.serialno") or target_properties.get(
+                        "ro.boot.serialno"
+                    )
+                    if target.timeout or target.exit_code != 0 or target_identity != identity:
+                        await self.adb.disconnect(address)
+                        raise DeviceUnavailable(
+                            "TCP device identity did not match; registration unchanged"
+                        )
+            except TimeoutError as exc:
+                raise DeviceUnavailable(
+                    "TCP switch timed out; reconnect Wireless Debugging before retrying"
+                ) from exc
+            except (OSError, RuntimeError) as exc:
+                if isinstance(exc, DeviceUnavailable):
+                    raise
+                raise DeviceUnavailable(
+                    "ADB transport failed; reconnect Wireless Debugging before retrying"
+                ) from exc
+            finally:
+                if invalidated:
+                    await self.connections.forget(device_id)
+                    stale = ConnectionObservation(device_id, DeviceState.OFFLINE)
+                    self.observations[device_id] = stale
+                    self.devices[device_id] = self._device(config, stale)
+            await self.registry.update(
+                device_id,
+                DeviceRegistration(
+                    name=config.name,
+                    connection_type=ConnectionType.ADB_TCP,
+                    host=config.host,
+                    port=5555,
+                    metadata=config.metadata,
+                    auto_connect=True,
+                ),
+            )
+            await self.adb.disconnect(device.serial)
+            # adbd can briefly reject a shell after reporting the TCP transport online.
+            # Wait for the full capability probe, rather than returning a successful
+            # switch with probe_failed and leaving the next scheduled poll to recover.
+            try:
+                async with asyncio.timeout(15):
+                    for attempt in range(3):
+                        if attempt:
+                            await asyncio.sleep(0.5)
+                        await self._poll()
+                        if self.get(device_id).state == DeviceState.ONLINE:
+                            break
+                    else:
+                        raise DeviceUnavailable(
+                            "ADB TCP is enabled on port 5555, but the shell is not ready. "
+                            "Click Reconnect to retry; pairing again is not required."
+                        )
+            except TimeoutError as exc:
+                self._invalidate_metrics(device_id)
+                pending = ConnectionObservation(device_id, DeviceState.RECONNECTING)
+                self.observations[device_id] = pending
+                self.devices[device_id] = self._device(await self.registry.get(device_id), pending)
+                raise DeviceUnavailable(
+                    "ADB TCP is enabled on port 5555; shell verification timed out. "
+                    "Click Reconnect to retry."
+                ) from exc
+            result_device = self.get(device_id)
+        await self.collect_metrics()
+        return result_device
 
     async def remove(self, device_id: str) -> None:
         async with self._lock:

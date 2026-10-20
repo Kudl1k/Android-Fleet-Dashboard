@@ -382,3 +382,15 @@ async def test_resize_notifies_owned_client_without_controlling_terminal() -> No
         assert await asyncio.wait_for(transport.read(), 3) == b"40 120"
     finally:
         await transport.close()
+
+
+async def test_enable_tcp_uses_fixed_port_and_argv() -> None:
+    from android_fleet.execution.models import CommandResult
+
+    client = SubprocessAdbClient()
+    with patch.object(client, "_run", new_callable=AsyncMock) as run:
+        run.return_value = CommandResult(stdout="restarting in TCP mode port: 5555")
+        await client.enable_tcp("192.168.1.8:37000", timeout=5)
+        run.assert_awaited_once_with(["-s", "192.168.1.8:37000", "tcpip", "5555"], 5)
+        with pytest.raises(ValueError):
+            await client.enable_tcp("-invalid")

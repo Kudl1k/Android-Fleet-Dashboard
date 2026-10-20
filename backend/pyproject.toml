@@ -7,7 +7,7 @@ name = "android-fleet-manager"
 version = "0.3.0"
 description = "Capability-driven Android fleet foundation over ADB"
 requires-python = ">=3.13"
-dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1", "websockets==15.0.1", "pydantic>=2.10,<3", "pydantic-settings>=2.7,<3", "prometheus-client>=0.21,<1", "asyncssh>=2.20,<3", "cryptography>=44,<49"]
+dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1", "websockets==15.0.1", "pydantic>=2.10,<3", "pydantic-settings>=2.7,<3", "prometheus-client>=0.21,<1", "asyncssh>=2.20,<3", "httpx>=0.28,<1", "cryptography>=44,<49"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3,<10", "pytest-asyncio>=0.25,<2", "httpx>=0.28,<1", "ruff>=0.9,<1", "mypy>=1.14,<2", "pre-commit>=4,<5"]
