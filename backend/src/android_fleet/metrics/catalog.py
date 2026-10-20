@@ -58,6 +58,7 @@ DEFINITIONS: dict[str, MetricDefinition] = {
     "zram_original_data": MetricDefinition("bytes"),
     "zram_compressed_data": MetricDefinition("bytes"),
     "zram_memory_used": MetricDefinition("bytes"),
+    "npu_frequency": MetricDefinition("hertz", labels=("accelerator",)),
     "gpu_usage": MetricDefinition("ratio", maximum=1),
     "gpu_frequency": MetricDefinition("hertz"),
     "gpu_max_frequency": MetricDefinition("hertz"),

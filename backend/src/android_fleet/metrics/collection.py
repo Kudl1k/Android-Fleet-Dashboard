@@ -11,6 +11,7 @@ from android_fleet.collectors.cpu_limits import CpuLimitsCollector
 from android_fleet.collectors.gpu import GpuCollector
 from android_fleet.collectors.memory import MemoryCollector
 from android_fleet.collectors.network import NetworkCollector
+from android_fleet.collectors.npu import NpuCollector
 from android_fleet.collectors.processes import ProcessCollector
 from android_fleet.collectors.storage import StorageCollector
 from android_fleet.collectors.thermal import ThermalCollector
@@ -44,6 +45,7 @@ class MetricPipeline:
                 CpuLimitsCollector(timeout=self.command_timeout),
                 ZramCollector(timeout=self.command_timeout),
                 GpuCollector(timeout=self.command_timeout),
+                NpuCollector(timeout=self.command_timeout),
                 ProcessCollector(timeout=self.command_timeout),
             )
         return self._collectors[device_id]

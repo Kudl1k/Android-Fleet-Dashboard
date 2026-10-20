@@ -2,13 +2,16 @@
 
 import asyncio
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from anyio import CancelScope
-from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
+from android_fleet.api.metric_models import HistoryResponse, history_response
 from android_fleet.devices.registry import DeviceNotFound
+from android_fleet.metrics.history import InvalidHistoryQuery
 from android_fleet.security import Actor
 from android_fleet.terminal.manager import Session, TerminalManager
 from android_fleet.terminal.models import SessionState, TerminalConfig, TerminalMessage
@@ -62,6 +65,37 @@ def router(manager: TerminalManager, security: Any) -> APIRouter:
     async def history(request: Request) -> dict[str, Any]:
         actor = await security.authorize(request, "terminal:view")
         return {"items": await manager.history(actor)}
+
+    @api.get("/sessions/{sid}/telemetry")
+    async def telemetry(
+        sid: str,
+        request: Request,
+        metric: str | None = Query(default=None, max_length=64),
+        limit: int = Query(default=1000, ge=1, le=10000),
+        cursor: str | None = Query(default=None, max_length=4096),
+        end: datetime | None = None,
+    ) -> HistoryResponse:
+        actor = await authorize(request, "telemetry.read")
+        item = await manager.recording_metadata(sid, actor)
+        if not item.get("device_recording", {}).get("enabled"):
+            raise HTTPException(409, "Device statistics were not recorded for this session")
+        start = datetime.fromtimestamp(item["created_at"], UTC)
+        # Pin 'end' across pages; active runs use the caller's first-page timestamp.
+        finish = (
+            datetime.fromtimestamp(item["ended_at"], UTC) if item["ended_at"] else datetime.now(UTC)
+        )
+        finish += timedelta(microseconds=1)
+        if end is not None:
+            if end.tzinfo is None:
+                raise HTTPException(422, "End timestamp must include a timezone")
+            finish = min(finish, end)
+        try:
+            page = await manager.recordings.query(
+                sid, start=start, end=finish, metric=metric, limit=limit, cursor=cursor
+            )
+        except InvalidHistoryQuery as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return history_response(item["device_id"], start, finish, page)
 
     @api.get("/sessions/{sid}")
     async def detail(sid: str, request: Request) -> dict[str, Any]:
@@ -203,12 +237,6 @@ def router(manager: TerminalManager, security: Any) -> APIRouter:
                     session.attached = False
                     if reason != "browser_disconnected":
                         manager.runtime_failures += 1
-                    await manager.stop(
-                        session,
-                        reason,
-                        SessionState.CLOSED
-                        if reason == "browser_disconnected"
-                        else SessionState.FAILED,
-                    )
+                        await manager.stop(session, reason, SessionState.FAILED)
 
     return api

@@ -96,3 +96,56 @@ Versioned editable dashboards are provisioned for fleet overview and device deta
 Battery status maps 1 unknown, 2 charging, 3 discharging, 4 not charging, 5 full.
 Health maps 1 unknown, 2 good, 3 overheat, 4 dead, 5 over-voltage, 6 unspecified
 failure, 7 cold. Unknown status never fabricates a charging observation.
+
+## Device statistics during program runs
+
+In the terminal workspace select an SSH profile associated with the Android device,
+enter a program command and leave **Record device statistics (15 seconds)** enabled.
+The device must be online over authenticated ADB and the actor must have both SSH
+access and device-scoped `telemetry.read`. No monitoring APK or additional device
+service is installed. An unassociated SSH destination can still run programs but
+cannot record Android telemetry.
+
+Recording takes a baseline before opening the program, samples on a 15-second target
+cadence while it runs, and takes a final sample at remote EOF. Slow collection never
+creates overlapping jobs or catch-up bursts; scheduled fleet polling and recordings
+share one per-device job and CPU baseline. Reconnects invalidate in-flight observations.
+All statistics are device-wide and include other workloads and collection overhead;
+GNU `time -v` remains the separate process-tree resource summary. Browser closure
+does not stop either recording. A backend restart interrupts the run but preserves
+samples already stored. Existing runs do not acquire recordings retroactively.
+
+Recorded samples are isolated by session ID in `terminals-telemetry.sqlite3` beside
+terminal metadata (a custom terminal filename gives the same `-telemetry` suffix).
+The recording store independently applies the configured history retention and
+maximum-point limits (seven days / one million metric points by default); eviction
+can leave partial or empty older charts even while session metadata remains visible.
+This SQLite file is included by the existing database backup script.
+
+Expand a recorded run to see charts and **Download device statistics (CSV)**. The
+same runs are selectable under **Historical telemetry → Program run charts** on the
+device page. Chart history, run charts, and the default backend collection now update
+every 15 seconds. A sample that takes longer than that is displayed at its actual
+observation time; unavailable readings leave gaps instead of zeros.
+
+The device page includes overall CPU, separate CPU-core lines, RAM used, all accessible
+temperatures, battery temperature, GPU utilization/frequency, and NPU frequency.
+HAL readings and sysfs thermal zones are both collected: bounded to 128 sensors from
+each source, with source-qualified sysfs names; a physical sensor may appear in both.
+Non-temperature BCL counters, invalid values, and denied sensors are excluded. Access
+still depends on firmware, SELinux policy, and observed root capabilities. See the
+[Android thermal interface](https://source.android.com/docs/core/power/thermal-mitigation).
+
+GPU support uses existing explicit Adreno/Mali backends. NPU frequency reads up to
+8 explicitly NPU-named devices from the standard Linux
+[devfreq interface](https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-devfreq).
+It is exported as `android_npu_frequency_hz{device_id,accelerator}`. There is no generic
+NPU utilization source: it remains unavailable unless a documented vendor backend is
+added. Neither GPU frequency nor NPU frequency establishes utilization or proves that
+a Python workload offloaded inference to an accelerator.
+
+`GET /api/v1/terminal/sessions/{sid}/telemetry` returns normalized timestamped metric
+points, with optional `metric`, `limit` (1–10000), `cursor`, and timezone-aware `end`.
+For an active run, pin the first page's returned `end` across cursor requests. Reads
+perform no ADB I/O and enforce session ownership, current profile access, and device
+scope, including for completed sessions loaded after a backend restart.

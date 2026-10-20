@@ -231,3 +231,42 @@ async def test_cancelled_waiter_does_not_cancel_shared_collection(tmp_path: Path
     assert app.state.metrics_worker.done()
     assert not app.state.fleet._metric_tasks
     assert not app.state.fleet._retired_metric_tasks
+
+
+async def test_recording_samples_share_scheduled_device_job_and_cancellation(
+    tmp_path: Path,
+) -> None:
+    adb = BlockingMetricsAdb()
+    app = create_app(adb, settings(tmp_path))
+    async with app.router.lifespan_context(app):
+        fleet = app.state.fleet
+        adb.blocked_command = ("dumpsys", "battery")
+        first = asyncio.create_task(fleet.sample_device("pixel-rooted"))
+        await asyncio.wait_for(adb.entered.wait(), timeout=1)
+        second = asyncio.create_task(fleet.sample_device("pixel-rooted"))
+        await asyncio.sleep(0)
+        job = fleet._metric_tasks["pixel-rooted"]
+        second.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await second
+        assert not job.cancelled()
+        assert not job.done()
+        adb.release.set()
+        sample = await first
+        assert sample is fleet.snapshots["pixel-rooted"]
+        assert sample is not None
+        assert not fleet._metric_tasks
+
+
+async def test_recording_waiter_discards_reconnected_observation(tmp_path: Path) -> None:
+    adb = BlockingMetricsAdb()
+    app = create_app(adb, settings(tmp_path))
+    async with app.router.lifespan_context(app):
+        fleet = app.state.fleet
+        adb.blocked_command = ("dumpsys", "battery")
+        recording = asyncio.create_task(fleet.sample_device("pixel-rooted"))
+        await asyncio.wait_for(adb.entered.wait(), timeout=1)
+        await fleet.disconnect("pixel-rooted")
+        assert await recording is None
+        assert "pixel-rooted" not in fleet.snapshots
+        assert await fleet.sample_device("pixel-rooted") is None

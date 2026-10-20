@@ -16,7 +16,7 @@ from android_fleet.metrics.models import MetricSnapshot, MetricValue
 
 THERMAL_SCRIPT = """n=0
 for p in /sys/class/thermal/thermal_zone[0-9]*; do
- [ "$n" -lt 32 ] || break
+ [ "$n" -lt 128 ] || break
  n=$((n+1))
  t=$(cat "$p/type" 2>/dev/null) || continue
  v=$(cat "$p/temp" 2>/dev/null) || continue
@@ -75,7 +75,7 @@ def parse_thermal(output: str) -> tuple[MetricValue, ...]:
             "thermal_temperature", temperature, "celsius", (("sensor", sensor), ("type", kind))
         )
         key = (sensor, kind)
-        if valid_metric(value) and (key in values or len(values) < 32):
+        if valid_metric(value) and (key in values or len(values) < 128):
             values[key] = value
     result = tuple(values.values())
     return result + ((status,) if status is not None else ())
@@ -83,7 +83,7 @@ def parse_thermal(output: str) -> tuple[MetricValue, ...]:
 
 def parse_thermal_sysfs(output: str) -> tuple[MetricValue, ...]:
     values: dict[tuple[str, str], MetricValue] = {}
-    for line in output.splitlines()[:32]:
+    for line in output.splitlines()[:128]:
         fields = line.split("|")
         if len(fields) != 3 or re.fullmatch(r"thermal_zone[0-9]+", fields[0]) is None:
             continue
@@ -119,8 +119,9 @@ class ThermalCollector:
             return snapshot(device)
         output = await read_shell(adb, device.serial, ("dumpsys", "thermalservice"), self._timeout)
         values = parse_thermal(output) if output is not None else ()
-        if self._sysfs_fallback and not any(v.name == "thermal_temperature" for v in values):
-            # Thermal zones are frequently root-only; read_script elevates where available.
+        if self._sysfs_fallback:
+            # HAL often exposes only a subset. Include accessible thermal zones too;
+            # read_script elevates only where root capability was observed.
             output = await read_script(adb, device, THERMAL_SCRIPT, self._timeout)
             if output is not None:
                 values += parse_thermal_sysfs(output)

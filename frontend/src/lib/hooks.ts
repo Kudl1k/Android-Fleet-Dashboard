@@ -62,6 +62,6 @@ export function useHistory(id: string, minutes: number, metric: string) {
             } while (cursor && pages < 20);
             return { points, truncated: cursor !== null };
         },
-        refetchInterval: polling ? Math.max(polling, 60000) : false,
+        refetchInterval: polling || false,
     });
 }

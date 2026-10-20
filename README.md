@@ -119,7 +119,8 @@ SSH profile enabled; select **Termux SSH · device name** in the Terminal panel
 
 The setup script is typed into Termux through authenticated ADB. Do not type or
 switch apps while it runs. Commands are submitted only while Termux owns the
-foreground window. Work is serialized with other per-device control operations,
+foreground window. Input is paced in small chunks to avoid losing the end of long
+commands in the terminal input queue. Work is serialized with other per-device control operations,
 has a ten-minute default budget (overridable with `setup.termux` / `setup.ssh` in
 `ANDROID_FLEET_OPERATIONS_TIMEOUTS`), and is not replayed after backend restart.
 Partial app installations or a running device-side script may remain after an
@@ -130,3 +131,38 @@ boot-time startup and battery-policy changes are not configured by this feature.
 Artifact metadata: https://f-droid.org/repo/index-v2.json; upstream setup details:
 https://github.com/termux/termux-app#installation and
 https://github.com/termux/termux-packages/tree/master/packages/openssh.
+
+### Persistent terminals and SSH program recordings
+
+Terminal sessions remain on the backend when you close a browser or navigate away.
+Open the terminal workspace and use **Sessions and recorded results → Resume session**
+to reconnect; **Close session** in that list explicitly terminates the remote shell
+and frees a session slot. Detached shells still count toward session limits. Sessions still
+end on backend restart/shutdown, revoked authorization, connection loss, or the
+configured maximum session lifetime. Attached interactive shells also retain the
+configured idle timeout. Output is buffered in memory (last 65,536 characters);
+slow clients may miss older output instead of terminating the remote program.
+
+Choose an SSH connection, enter a **Program command**, and select **Record run**.
+The approved SSH host must provide GNU `time` with `-v` and `sh`. Its final report
+includes CPU utilization, user/system CPU seconds, elapsed time, maximum resident
+RAM (KiB), I/O and exit status for the command and its waited-for children. This is
+a whole-run resource summary, not a sampled CPU/RAM timeline or device-wide metric.
+Unsupported `time` implementations report their error in the saved output; missing
+observations are not filled with zeros. Background processes that outlive the command
+are outside the report.
+
+Recorded commands and their last 65,536 output characters are saved to the terminal
+SQLite database and remain available in session history after backend restart. Use
+**Download results** to save the report as text. Command/output can contain secrets;
+record only content appropriate to retain on the backend. Interactive shell output
+is not stored on disk. An interrupted run may have partial output without a final
+resource report; consult the session state and termination reason.
+
+For device-wide charts alongside a program run, leave **Record device statistics
+(15 seconds)** enabled on an SSH profile linked to an online Android device. Expand
+the run for CPU per core, overall CPU, RAM, thermal sensors and supported GPU/NPU
+readings, or select it in the device page's **Historical telemetry → Program run
+charts**. Download the timestamped readings as CSV. Default metric collection and
+chart refresh are 15 seconds. Unsupported accelerator readings remain unavailable;
+see [recording details and limits](docs/METRICS.md#device-statistics-during-program-runs).

@@ -169,6 +169,13 @@ async def test_setup_installs_verifies_and_reuses_encrypted_managed_key(
     secret = await profiles.credentials(profile)
     assert secret.encode() not in profiles.path.read_bytes()
     assert "PRIVATE KEY" not in str(result) + str(progress) + profile.model_dump_json()
+    chunks = [argv[2] for _, argv in adb.calls if argv[:2] == ("input", "text")]
+    assert len(chunks) > 1
+    assert all(len(chunk.replace("%s", " ")) <= 64 for chunk in chunks)
+    command = "".join(chunks)
+    assert command.startswith("echo%s") and command.endswith("|base64%s-d|bash")
+    script = base64.b64decode(command.removeprefix("echo%s").split("|", 1)[0]).decode()
+    assert "PasswordAuthentication no" in script
     await service.run("device", "setup.ssh", progress.append)
     assert (await profiles.credentials(await profiles.get(pid))) == secret
     assert len(await profiles.list(Actor("admin", "administrator", frozenset()))) == 1

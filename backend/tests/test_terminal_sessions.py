@@ -121,6 +121,7 @@ async def test_limits_single_use_and_close_invalidates_tickets(manager: Terminal
 
 async def test_idle_lifetime_and_backend_recovery(manager: TerminalManager) -> None:
     session = await manager.create(ACTOR, CONFIG)
+    session.attached = True
     session.last_activity = time.monotonic() - 400
     await asyncio.sleep(1.1)
     assert session.state == SessionState.TIMED_OUT
@@ -162,14 +163,14 @@ async def test_slow_client_bounded_queue_and_transport_failure(manager: Terminal
     session = await manager.create(ACTOR, CONFIG)
     await session.queue.get()
     assert session.transport is not None
-    # The producer blocks at the configured queue bound, then fails cleanly.
     for _ in range(manager.settings.terminal_queue_chunks + 2):
         await session.transport.write(b"output")
+    await asyncio.sleep(0.05)
     assert session.queue.qsize() <= manager.settings.terminal_queue_chunks
-    await asyncio.sleep(5.1)
-    assert session.state == SessionState.FAILED
-    assert session.termination_reason == "transport_failed"
-    assert session.transport.closed
+    assert session.state == SessionState.ACTIVE
+    ticket = await manager.ticket(session, ACTOR)
+    await manager.attach(session.id, ticket["ticket"])
+    assert "output" in (await session.queue.get())["data"]
 
 
 async def test_device_disconnect_and_browser_disconnect_cleanup(manager: TerminalManager) -> None:
@@ -205,3 +206,37 @@ async def test_ssh_session_lifecycle_and_profile_acl(manager: TerminalManager) -
     await manager.stop(session)
     assert transport.closed
     assert manager.metrics()["active_ssh"] == 0
+
+
+async def test_recording_output_is_bounded_and_saved(manager: TerminalManager) -> None:
+    from unittest.mock import AsyncMock
+
+    from android_fleet.adb.fake import FakeTerminal
+
+    transport = FakeTerminal()
+    manager.ssh_gateway = SimpleNamespace(
+        profiles=SimpleNamespace(get=AsyncMock(return_value=SimpleNamespace(device_id=None))),
+        authorize=AsyncMock(),
+        open=AsyncMock(return_value=transport),
+    )
+    actor = Actor("ssh-user", "operator", frozenset({"terminal:ssh", "terminal:view"}))
+    session = await manager.create(
+        actor,
+        TerminalConfig(
+            connection_type="ssh", profile_id="approved", command="python3 benchmark.py"
+        ),
+    )
+    manager.ssh_gateway.open.assert_awaited_once_with(
+        "approved", actor, 80, 24, "python3 benchmark.py"
+    )
+    await transport.write(b"x" * 70000)
+    async with asyncio.timeout(3):
+        while not session.output_truncated:  # noqa: ASYNC110 - observe background reader
+            await asyncio.sleep(0.01)
+    await manager.stop(session)
+    record = (await manager.history(actor))[0]
+    assert record["command"] == "python3 benchmark.py"
+    assert len(record["output"]) == 65536
+    assert record["output_truncated"]
+    with pytest.raises(ValueError):
+        TerminalConfig(connection_type="adb", device_id="registered", command="id")

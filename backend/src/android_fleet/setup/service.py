@@ -153,7 +153,17 @@ class DeviceSetup:
             progress("Configuring key-only SSH in Termux; leave its terminal in the foreground")
             if not await focused():
                 raise SetupError("Termux lost focus; open its shell and retry Enable Termux SSH")
-            await shell(("input", "text", command), timeout=30)
+            # Long input bursts can overflow the terminal's input queue and lose
+            # the end of the command. Pace bounded chunks before pressing Enter.
+            text = command.replace("%s", " ")
+            for offset in range(0, len(text), 64):
+                if not await focused():
+                    raise SetupError(
+                        "Termux lost focus while typing; clear its input before retrying"
+                    )
+                chunk = text[offset : offset + 64].replace(" ", "%s")
+                await shell(("input", "text", chunk), timeout=10)
+                await asyncio.sleep(0.1)
             if not await focused():
                 raise SetupError(
                     "Termux lost focus before execution; reopen its shell before retrying"

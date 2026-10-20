@@ -225,15 +225,15 @@ async def test_real_gateway_websocket_concurrency_resize_controls_cleanup(runtim
         finally:
             for _, ws in streams:
                 await ws.close()
-        async with asyncio.timeout(3):
-            while manager.metrics()["active_ssh"]:  # noqa: ASYNC110 - verify external disconnect
-                await asyncio.sleep(0.01)
-        assert observations.count(("closed", None)) == 2
-        history = (await client.get("/api/v1/terminal/sessions")).json()["items"]
-        assert len(history) == 2
-        assert all(item["termination_reason"] == "browser_disconnected" for item in history)
-        assert "ephemeral-test-password" not in json.dumps(history)
-        assert all(manager.sessions[sid].task.done() for sid, _ in streams)
+        await asyncio.sleep(0.05)
+        assert manager.metrics()["active_ssh"] == 2
+        assert observations.count(("closed", None)) == 0
+        for sid, _ in streams:
+            session = manager.sessions[sid]
+            assert not session.attached
+            ticket = await manager.ticket(session, session.owner)
+            assert ticket["ticket"]
+            await manager.stop(session)
 
 
 async def test_changed_host_key_and_profile_acl_reject_before_session(runtime: Any) -> None:

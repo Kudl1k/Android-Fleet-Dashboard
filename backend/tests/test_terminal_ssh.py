@@ -170,3 +170,26 @@ async def test_profile_rest_redaction_and_failure_audit(
     assert any(item["error"] == "connection_failed" for item in records)
     assert any(item["authorization"] == "denied" for item in records)
     assert "secret-password" not in str(records)
+
+
+async def test_recorded_command_uses_quoted_time_wrapper(
+    profiles: ProfileService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import shlex
+    from unittest.mock import AsyncMock
+
+    profile = await profiles.save(body())
+    key = asyncssh.generate_private_key("ssh-ed25519")
+    await profiles._query(
+        "UPDATE ssh_profiles SET host_key=? WHERE id=?",
+        (key.export_public_key().decode(), profile.id),
+    )
+    connection = AsyncMock()
+    connect = AsyncMock(return_value=connection)
+    monkeypatch.setattr(asyncssh, "connect", connect)
+    command = "printf '%s\\n' \"a'b\"; exit 7"
+    actor = Actor("admin", "administrator", frozenset({"terminal:ssh"}))
+    await SSHGateway(profiles).open(profile.id, actor, 80, 24, command)
+    wrapped = connection.create_process.call_args.kwargs["command"]
+    assert shlex.split(wrapped) == ["LC_ALL=C", "command", "time", "-v", "sh", "-c", command]
+    assert connect.call_args.kwargs["known_hosts"]

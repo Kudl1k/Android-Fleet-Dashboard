@@ -46,6 +46,7 @@ METRICS = {
     "zram_original_data": "android_zram_original_data_bytes",
     "zram_compressed_data": "android_zram_compressed_data_bytes",
     "zram_memory_used": "android_zram_memory_used_bytes",
+    "npu_frequency": "android_npu_frequency_hz",
     "gpu_usage": "android_gpu_usage_ratio",
     "gpu_frequency": "android_gpu_frequency_hz",
     "gpu_max_frequency": "android_gpu_max_frequency_hz",
@@ -54,7 +55,7 @@ METRICS = {
     "process_memory": "android_process_memory_bytes",
 }
 INFO_LABELS = ("manufacturer", "model", "android_version", "soc", "kernel")
-_LIMITS = {"interface": 32, "sensor": 32, "core": 256, "process": 16}
+_LIMITS = {"interface": 32, "sensor": 256, "core": 256, "process": 16, "accelerator": 8}
 
 
 def _info_value(value: str | None) -> str:

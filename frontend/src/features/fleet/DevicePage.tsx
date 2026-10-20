@@ -3,17 +3,10 @@ import DeviceSetup from "../control/DeviceSetup";
 import DeviceControl from "../control/DeviceControl";
 import LiveScreen from "../screen/LiveScreen";
 import TerminalPanel from "../terminal/TerminalPanel";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import {
-    LineChart,
-    Line,
-    XAxis,
-    YAxis,
-    Tooltip,
-    ResponsiveContainer,
-    CartesianGrid,
-} from "recharts";
+import MetricChart, { deviceCharts } from "../telemetry/MetricChart";
+import DeviceRunCharts from "../terminal/DeviceRunCharts";
 import { useDevice, useMetrics, useHistory } from "../../lib/hooks";
 import { formatMetric, metricValue, type HistoryPoint } from "../../lib/api";
 import { fleetGroup } from "./FleetPage";
@@ -46,130 +39,12 @@ function HistoryChart({
     unit: string;
 }) {
     const history = useHistory(id, minutes, name);
-    const points = useMemo(
-        () => chartPoints(history.data?.points ?? []),
-        [history.data],
-    );
-    return (
-        <section className="panel chart-panel">
-            <h2>{label}</h2>
-            {history.isPending ? (
-                <div className="skeleton chart-skeleton" />
-            ) : history.isError ? (
-                <p className="error" role="alert">
-                    {history.error.message}
-                </p>
-            ) : points.length ? (
-                <>
-                    <div
-                        className="chart"
-                        role="img"
-                        aria-label={`${label} history, ${points.length} observations`}
-                    >
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={points}>
-                                <CartesianGrid
-                                    stroke="var(--border)"
-                                    strokeDasharray="3 3"
-                                />
-                                <XAxis
-                                    dataKey="time"
-                                    type="number"
-                                    domain={["dataMin", "dataMax"]}
-                                    tickFormatter={(v) =>
-                                        new Date(v).toLocaleTimeString([], {
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                            ...(minutes >= 1440 ? { month: "short", day: "numeric" } as const : {}),
-                                        })
-                                    }
-                                    minTickGap={45}
-                                />
-                                <YAxis
-                                    tickFormatter={(v) =>
-                                        unit === "bytes"
-                                            ? formatMetric(Number(v), "bytes")
-                                            : String(v)
-                                    }
-                                    width={70}
-                                    unit={
-                                        unit === "ratio"
-                                            ? "%"
-                                            : unit === "celsius"
-                                              ? "°"
-                                              : ""
-                                    }
-                                />
-                                <Tooltip
-                                    labelFormatter={(v) =>
-                                        new Date(Number(v)).toLocaleString()
-                                    }
-                                    contentStyle={{
-                                        background: "var(--panel)",
-                                        borderColor: "var(--border)",
-                                        borderRadius: 8,
-                                    }}
-                                />
-                                <Line
-                                    type="linear"
-                                    dataKey="value"
-                                    name={label}
-                                    stroke="var(--accent)"
-                                    strokeWidth={2}
-                                    dot={false}
-                                    connectNulls={false}
-                                    isAnimationActive={false}
-                                />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <details>
-                        <summary>View accessible observation table</summary>
-                        <div className="table-wrap">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Observed at</th>
-                                        <th>{label}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {history.data?.points
-                                        .slice(-100)
-                                        .map((p, i) => (
-                                            <tr key={i}>
-                                                <td>
-                                                    {new Date(
-                                                        p.observed_at,
-                                                    ).toLocaleString()}
-                                                </td>
-                                                <td>
-                                                    {formatMetric(
-                                                        p.value,
-                                                        p.unit,
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <p className="muted">Most recent 100 observations.</p>
-                    </details>
-                    {history.data?.truncated && (
-                        <p className="muted">
-                            Display limit reached; choose a shorter time range.
-                        </p>
-                    )}
-                </>
-            ) : (
-                <p className="empty muted">
-                    No supported observations in this time range.
-                </p>
-            )}
-        </section>
-    );
+    return <>
+        <MetricChart title={label} unit={unit} points={history.data?.points ?? []} loading={history.isPending} error={history.isError ? history.error.message : undefined} />
+        {history.data?.truncated && <p className="muted">Display limit reached; choose a shorter time range.</p>}
+    </>;
 }
+
 export default function DevicePage() {
     const { id = "" } = useParams();
     const device = useDevice(id);
@@ -297,6 +172,10 @@ export default function DevicePage() {
                             "battery_temperature",
                             "battery_voltage",
                             "cpu_usage",
+                            "cpu_core_usage",
+                            "gpu_usage",
+                            "gpu_frequency",
+                            "npu_frequency",
                             "cpu_frequency",
                             "memory_used",
                             "memory_available",
@@ -455,13 +334,9 @@ export default function DevicePage() {
                     </select>
                 </label>
             </div>
+            <DeviceRunCharts deviceId={id} />
             <div className="detail-grid">
-                {[
-                    ["battery_level", "Battery level", "ratio"],
-                    ["cpu_usage", "CPU utilization", "ratio"],
-                    ["memory_used", "RAM used", "bytes"],
-                    ["battery_temperature", "Battery temperature", "celsius"],
-                ].map(([name, label, unit]) => (
+                {[["battery_level", "Battery level", "ratio"], ...deviceCharts].map(([name, label, unit]) => (
                     <HistoryChart
                         key={name}
                         id={id}

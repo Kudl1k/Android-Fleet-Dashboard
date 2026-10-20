@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     adb_server_host: str | None = Field(default=None, validation_alias="ADB_SERVER_HOST")
     adb_server_port: int = Field(default=5037, ge=1, le=65535, validation_alias="ADB_SERVER_PORT")
     poll_interval_seconds: float = Field(
-        default=30.0, ge=1.0, allow_inf_nan=False, validation_alias="ANDROID_FLEET_POLL_INTERVAL"
+        default=15.0, ge=1.0, allow_inf_nan=False, validation_alias="ANDROID_FLEET_POLL_INTERVAL"
     )
 
     @field_validator("adb_server_host", mode="before")
@@ -65,7 +65,7 @@ class Settings(BaseSettings):
         return None if value == "" else value
 
     metrics_interval_seconds: float = Field(
-        default=30, ge=1, allow_inf_nan=False, validation_alias="ANDROID_FLEET_METRICS_INTERVAL"
+        default=15, ge=1, allow_inf_nan=False, validation_alias="ANDROID_FLEET_METRICS_INTERVAL"
     )
     metrics_command_timeout: float = Field(
         default=5,

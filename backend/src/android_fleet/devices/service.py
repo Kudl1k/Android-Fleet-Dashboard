@@ -238,9 +238,37 @@ class FleetService:
             elif all(result is True for result in results):
                 self._history_write_healthy = True
 
+    async def sample_device(self, device_id: str) -> MetricSnapshot | None:
+        """Request a fresh sample while sharing the fleet's per-device collection job.
+
+        Recording and scheduled polling cannot race CPU baselines or issue a second
+        collection on the same device. A reconnect invalidates the awaited result.
+        """
+        async with self._lock:
+            device = self.get(device_id)
+            if self._closing or device.state != DeviceState.ONLINE:
+                return None
+            generation = self.observation_generation(device_id)
+            task = self._metric_tasks.get(device_id)
+            if task is None or task.done():
+                task = asyncio.create_task(self._collect_device(deepcopy(device), generation))
+                self._metric_tasks[device_id] = task
+        try:
+            result = await asyncio.shield(task)
+        except asyncio.CancelledError:
+            waiter = asyncio.current_task()
+            if waiter is not None and waiter.cancelling():
+                raise
+            return None
+        if result is None or self.observation_generation(device_id) != generation:
+            return None
+        return self.snapshots.get(device_id)
+
     async def run_metrics(self, interval: float) -> None:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + interval
         while True:
-            await asyncio.sleep(interval)  # noqa: ASYNC110 - scheduled sampling
+            await asyncio.sleep(max(0, deadline - loop.time()))
             await self.collect_metrics()
             try:
                 await self.history.prune()
@@ -248,6 +276,7 @@ class FleetService:
                 self._history_prune_healthy = False
             else:
                 self._history_prune_healthy = True
+            deadline = max(deadline + interval, loop.time())
 
     async def stop_metrics(self) -> None:
         self._closing = True

@@ -25,6 +25,7 @@ def test_exporter_covers_catalog_with_expected_units_labels() -> None:
     values = []
     label_examples = {
         "core": "0",
+        "accelerator": "npu0",
         "mount": "/data",
         "interface": "wlan0",
         "sensor": "cpu0",
@@ -94,13 +95,13 @@ def test_duplicate_invalid_or_unbounded_values_are_omitted() -> None:
     )
     values.extend(
         MetricValue("thermal_temperature", 20, "celsius", (("sensor", f"s{i}"), ("type", "cpu")))
-        for i in range(40)
+        for i in range(300)
     )
     families = list(text_string_to_metric_families(exposition(tuple(values))))
     samples = [sample for family in families for sample in family.samples]
     assert len([s for s in samples if s.name == "android_cpu_usage_ratio"]) == 1
     assert len([s for s in samples if s.name == "android_network_receive_bytes_total"]) == 32
-    assert len([s for s in samples if s.name == "android_temperature_celsius"]) == 32
+    assert len([s for s in samples if s.name == "android_temperature_celsius"]) == 256
     assert not any(
         s.name
         in {

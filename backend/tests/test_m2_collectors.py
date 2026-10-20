@@ -280,7 +280,7 @@ def test_dimension_bounds_cpu_network_thermal() -> None:
     output = "Current temperatures from HAL:\n" + "\n".join(
         f" Temperature{{mValue=40, mType=0, mName=cpu{i}}}" for i in range(40)
     )
-    assert len(parse_thermal(output)) == 32
+    assert len(parse_thermal(output)) == 40
     assert parse_cpu_stat("cpu " + "9" * 5000 + " 1 1 1") == {}
     assert parse_network("wlan0: " + "9" * 5000 + " 0 0 0 0 0 0 0 2 0 0 0 0 0 0 0") == ()
 

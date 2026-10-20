@@ -1,6 +1,7 @@
 """AsyncSSH gateway with explicit credentials, IP dialing and pinned host keys."""
 
 import asyncio
+import shlex
 
 import asyncssh
 from fastapi import HTTPException
@@ -51,7 +52,9 @@ class SSHGateway:
         except (OSError, asyncssh.Error, TimeoutError) as exc:
             raise HTTPException(502, "SSH host key retrieval failed") from exc
 
-    async def open(self, profile_id: str, actor: Actor, cols: int, rows: int) -> SSHTransport:
+    async def open(
+        self, profile_id: str, actor: Actor, cols: int, rows: int, command: str | None = None
+    ) -> SSHTransport:
         profile = await self.profiles.authorize(profile_id, actor)
         address = await self.profiles.destination(profile)
         key = await self.profiles.host_key(profile_id)
@@ -80,6 +83,11 @@ class SSHGateway:
             )
             process = await asyncio.wait_for(
                 connection.create_process(
+                    command=(
+                        "LC_ALL=C command time -v sh -c " + shlex.quote(command)
+                        if command is not None
+                        else None
+                    ),
                     term_type="xterm-256color",
                     term_size=(cols, rows),
                     encoding=None,
