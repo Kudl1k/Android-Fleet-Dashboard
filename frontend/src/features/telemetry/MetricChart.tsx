@@ -1,3 +1,4 @@
+import ListRegion from "../../components/ListRegion";
 import { useMemo } from "react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatMetric, type HistoryPoint } from "../../lib/api";
@@ -63,10 +64,10 @@ export default function MetricChart({ title, unit, points, loading, error }: {
                     {series.map((item, i) => <Line key={item.key} dataKey={item.key} name={item.label} stroke={colors[i % colors.length]} dot={false} connectNulls={false} isAnimationActive={false} type="linear" />)}
                 </LineChart></ResponsiveContainer>
             </div>
-            <details><summary>View accessible observation table</summary><div className="table-wrap"><table>
-                <thead><tr><th>Observed at</th><th>Core / sensor</th><th>{title}</th></tr></thead>
-                <tbody>{points.slice(-100).map((point, i) => <tr key={i}><td>{new Date(point.observed_at).toLocaleString()}</td><td>{Object.entries(point.labels).map(([key, value]) => `${key}: ${value}`).join(" · ") || "Overall"}</td><td>{formatMetric(point.value, point.unit)}</td></tr>)}</tbody>
-            </table></div><p className="muted">Most recent 100 observations.</p></details>
+            <details><summary>View accessible observation table</summary><ListRegion label={`${title} observations`} className="observation-table"><table>
+                <thead><tr><th scope="col">Observed at</th><th scope="col">Core / sensor</th><th scope="col" className="numeric-cell">{title}</th></tr></thead>
+                <tbody>{points.slice(-100).map((point, i) => <tr key={i}><td>{new Date(point.observed_at).toLocaleString()}</td><td>{Object.entries(point.labels).map(([key, value]) => `${key}: ${value}`).join(" · ") || "Overall"}</td><td className="numeric-cell">{formatMetric(point.value, point.unit)}</td></tr>)}</tbody>
+            </table></ListRegion><p className="muted">Showing {Math.min(points.length, 100)} of {points.length} observations (most recent 100).</p></details>
         </>}
     </section>;
 }

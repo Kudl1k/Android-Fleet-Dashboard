@@ -275,7 +275,7 @@ export default function AlertsPage() {
                 {events.data?.items.length === 0 && (
                     <p>No alerts match these filters.</p>
                 )}
-                <div className="table-wrap">
+                <div className="table-wrap" tabIndex={0} role="region" aria-label="Alert activity">
                     <table>
                         <thead>
                             <tr>
@@ -382,7 +382,7 @@ export default function AlertsPage() {
                     </p>
                 )}
                 {rules.data?.length === 0 && <p>No alert rules configured.</p>}
-                <div className="table-wrap">
+                <div className="table-wrap" tabIndex={0} role="region" aria-label="Alert rules">
                     <table>
                         <thead>
                             <tr>

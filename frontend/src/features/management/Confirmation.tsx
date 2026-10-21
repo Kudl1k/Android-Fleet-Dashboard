@@ -9,11 +9,15 @@ export default function Confirmation({
     onCancel: () => void;
 }) {
     const dialog = useRef<HTMLDialogElement>(null);
+    // Capture before child autofocus and keep the opener through StrictMode replay.
+    const opener = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
     useEffect(() => {
-        const previous = document.activeElement as HTMLElement | null;
-        dialog.current?.showModal();
+        const element = dialog.current;
+        const previous = opener.current;
+        element?.showModal();
         return () => {
-            previous?.focus();
+            if (element?.open) element.close();
+            if (previous?.isConnected) previous.focus();
         };
     }, []);
     return (

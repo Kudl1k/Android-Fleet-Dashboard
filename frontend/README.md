@@ -27,8 +27,8 @@ npm run build
 incident history, and `features/management` owns registration and connection
 controls. `src/lib` contains the typed HTTP client, query hooks, memory-only control
 authentication and toast notifications. Polling is selectable in the app header;
-history refresh is bounded to at most once a minute. Missing/stale/offline metrics
-show unavailable. Chart ranges are 15 minutes, 1 hour, 6 hours, 24 hours and 7 days.
+device history follows that interval after its first opening. Missing/stale/offline metrics
+remain unavailable. Chart ranges are 15 minutes, 1 hour, 6 hours, 24 hours and 7 days.
 
 Control access accepts the existing backend bearer token into memory only. Reload
 clears it. Only theme preference is stored locally. Pairing remains operator-managed;
@@ -47,3 +47,15 @@ Control never activates automatically. An operator or administrator with `screen
 Release control or stop when finished. Route changes, sign-out and browser disconnect clean up the session. Temporary transport recovery releases control; request it again after recovery. A failed or disconnected socket requires a fresh view-only start. Slow decoding produces a lower-quality restart message. Backend ownership and input checks remain authoritative even when buttons are disabled.
 
 Unit tests use fixtures and mocked transport; they do not prove hardware playback. See [M5 validation](../docs/M5_VALIDATION.md) for actual Chromium, Samsung and pending interactive acceptance.
+
+## Interface guidance
+
+See [design direction](../DESIGN.md) and the [UI review and validation](../docs/UI_REVIEW.md) for shared tokens, responsive behavior, accessibility conventions, and verification limits.
+
+## Device workspace
+
+Device details prioritize connection status, one collection/freshness area, and up to four available key observations. Expand Performance, Memory & storage, Battery & thermal, or Network to inspect details; Metric availability lists sources missing from the latest collection. Network observations remain cumulative counters, not rates. Missing, stale, disconnected, loading and failed collections are distinct states; failed connection checks also withhold cached current values.
+
+Use the History link or Historical telemetry disclosure for the existing ranges and recorded-run charts. History starts loading when first opened and retains the selected range after collapse. Device tools contains Live screen, Terminal, Device controls, and Setup & connectivity. Setup remains optional; monitoring uses authenticated ADB. Live screen and terminal remain mounted when collapsed. Stream status is visible in the live-screen summary; use Stop stream or Close session to finish. Route changes and authentication changes retain the existing tool cleanup behavior.
+
+On Node 25, run tests with `NODE_OPTIONS=--no-experimental-webstorage npm test` to avoid the runtime's experimental web-storage conflict with jsdom.

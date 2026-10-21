@@ -6,7 +6,7 @@ import "./screen.css";
 interface Session { id: string; state: string; control?: boolean }
 const presets = [{ label: "Low · 480 max edge / 15 FPS", max_size: 480, max_fps: 15, bitrate: 1000000 }, { label: "Medium · 720 max edge / 30 FPS", max_size: 720, max_fps: 30, bitrate: 2000000 }, { label: "High · 1080 max edge / 30 FPS", max_size: 1080, max_fps: 30, bitrate: 4000000 }];
 const keycodes: Record<string, number> = { Backspace: 67, Enter: 66, Escape: 4, ArrowUp: 19, ArrowDown: 20, ArrowLeft: 21, ArrowRight: 22, Tab: 61, Shift: 59, Control: 113, Alt: 57, Delete: 112 };
-export default function LiveScreen({ id, online }: { id: string; online: boolean }) {
+export default function LiveScreen({ id, online, onStateChange }: { id: string; online: boolean; onStateChange?: (state: string) => void }) {
     const auth = useAuth(), canvas = useRef<HTMLCanvasElement>(null), surface = useRef<HTMLDivElement>(null);
     const active = useRef<{ session: Session; socket?: WebSocket; decoder?: ScreenDecoder; heartbeat?: ReturnType<typeof setInterval>; sampling?: ReturnType<typeof setInterval> }>(null);
     const controlEpoch = useRef(0), controlPending = useRef(false);
@@ -15,6 +15,7 @@ export default function LiveScreen({ id, online }: { id: string; online: boolean
     const cleanup = useRef<Promise<void>>(Promise.resolve());
     const generation = useRef(0), control = useRef(false), pending = useRef(false), mounted = useRef(true);
     const [state, setState] = useState("stopped"), [error, setError] = useState(""), [quality, setQuality] = useState(1), [owns, setOwns] = useState(false), [focused, setFocused] = useState(false), [stats, setStats] = useState({ fps: 0, firstFrame: 0, dropped: 0, received: 0, bitrate: 0 });
+    useEffect(() => { onStateChange?.(state); }, [state, onStateChange]);
     const send = (message: object) => { const ws = active.current?.socket; if (ws?.readyState === WebSocket.OPEN && ws.bufferedAmount < 65536) ws.send(JSON.stringify(message)); };
     const dispose = () => {
         const old = active.current; active.current = null; control.current = false; controlEpoch.current++; heldKeys.current.clear();
@@ -108,9 +109,9 @@ export default function LiveScreen({ id, online }: { id: string; online: boolean
     };
     const live = ["starting", "streaming", "reconnecting"].includes(state);
     return <section className="panel live-screen" aria-labelledby="live-screen-title">
-        <div className="screen-heading"><div><h2 id="live-screen-title">Live Screen</h2><p className="muted">Authorized ADB video · {owns ? "You are controlling this device" : "View-only"}</p></div><span role="status" className={`badge ${owns ? "screen-controller" : ""}`}>{state}</span></div>
+        <div className="screen-heading"><div><h2 id="live-screen-title">Live screen</h2><p className="muted">Authorized ADB video · {owns ? "You are controlling this device" : "View-only"}</p></div><span role="status" className={`badge ${owns ? "screen-controller" : ""}`}>{state}</span></div>
         {!auth.can("screen:view") ? <p>Screen viewing permission is required.</p> : <>
-            <div className="screen-toolbar"><label>Stream quality<select value={quality} disabled={live} onChange={e => setQuality(Number(e.target.value))}>{presets.map((p, i) => <option key={i} value={i}>{p.label}</option>)}</select></label><button disabled={live || !online} onClick={() => void start()}>Start view-only</button><button disabled={!live} onClick={stop}>Stop stream</button><button disabled={state !== "streaming" || !auth.can("screen:control")} onClick={() => void changeControl()}>{owns ? "Release control" : "Request control"}</button><button disabled={state !== "streaming"} onClick={() => { if (!surface.current?.requestFullscreen) setError("Fullscreen is unavailable."); else void surface.current.requestFullscreen().catch(() => setError("Fullscreen is unavailable.")); }}>Fullscreen</button></div>
+            <div className="screen-toolbar device-screen-toolbar"><label>Stream quality<select value={quality} disabled={live} onChange={e => setQuality(Number(e.target.value))}>{presets.map((p, i) => <option key={i} value={i}>{p.label}</option>)}</select></label><div className="actions device-actions" role="group" aria-label="Stream playback"><button className="primary device-pending-action" aria-busy={state === "starting"} disabled={live || !online} onClick={() => void start()}>Start view-only</button><button disabled={!live} onClick={stop}>Stop stream</button></div><div className="actions device-actions" role="group" aria-label="Screen interaction"><button className="device-control-action" disabled={state !== "streaming" || !auth.can("screen:control")} onClick={() => void changeControl()}>{owns ? "Release control" : "Request control"}</button><button disabled={state !== "streaming"} onClick={() => { if (!surface.current?.requestFullscreen) setError("Fullscreen is unavailable."); else void surface.current.requestFullscreen().catch(() => setError("Fullscreen is unavailable.")); }}>Fullscreen</button></div></div>
             {!online && <p className="muted">Device must be online to start streaming.</p>}
             {error && <p className="error" role="alert">{error}</p>}
             <div className={`screen-surface ${owns ? "controlling" : ""}`} ref={surface}>
@@ -118,7 +119,7 @@ export default function LiveScreen({ id, online }: { id: string; online: boolean
                 {state !== "streaming" && <div className="screen-overlay">{state === "starting" ? "Connecting to Android video…" : state === "reconnecting" ? "Reconnecting…" : "Start a session to view the live display"}</div>}
             </div>
             <p className="muted">{stats.fps.toFixed(1)} decoded/rendered FPS · First frame {stats.firstFrame.toFixed(0)} ms · {stats.bitrate.toFixed(0)} kbit/s received · {stats.received} received frames · {stats.dropped} dropped frames · {owns ? (focused ? "Keyboard focused" : "Click or focus the screen to type") : "Input disabled"}</p>
-            <div className="screen-toolbar" aria-label="Android navigation">{[["back", "Back"], ["home", "Home"], ["recent", "Recent apps"], ["wake", "Wake screen"], ["volume_down", "Volume −"], ["volume_up", "Volume +"]].map(([key, label]) => <button key={key} disabled={!owns || state !== "streaming"} onClick={() => send({ type: "nav", key })}>{label}</button>)}</div>
+            <div className="screen-toolbar actions device-actions" role="group" aria-label="Android navigation">{[["back", "Back"], ["home", "Home"], ["recent", "Recent apps"], ["wake", "Wake screen"], ["volume_down", "Volume −"], ["volume_up", "Volume +"]].map(([key, label]) => <button key={key} disabled={!owns || state !== "streaming"} onClick={() => send({ type: "nav", key })}>{label}</button>)}</div>
             <p className="muted">Quality changes require stopping and restarting. Reconnection always starts view-only. No audio or clipboard synchronization.</p>
         </>}
     </section>;

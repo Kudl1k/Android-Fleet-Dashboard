@@ -13,9 +13,9 @@ export default function AdbTcpSwitch({id, online}:{id:string; online:boolean}) {
   setDone(true);setConfirm(false);
  }catch(err){setError(err instanceof Error?err.message:"TCP switch failed");}
  finally{setBusy(false);await client.invalidateQueries();}};
- return <div>{done?<p role="status">ADB TCP enabled on port 5555.</p>:<button disabled={!online||busy} onClick={()=>setConfirm(true)}>Switch to ADB TCP</button>}
+ return <div className="device-tcp-switch">{done?<p role="status">ADB TCP enabled on port 5555.</p>:<button disabled={!online||busy} onClick={()=>setConfirm(true)}>Switch to ADB TCP</button>}
  {confirm&&<div><p>Switch this device to ADB TCP on port 5555? This may close open shells. Its name and history are preserved. Use a trusted network; TCP mode may need enabling again after reboot.</p>
- <button disabled={busy} onClick={()=>void run()}>{busy?"Switching…":"Enable TCP and reconnect"}</button>
- <button disabled={busy} onClick={()=>setConfirm(false)}>Cancel</button></div>}
+ <div className="actions device-actions"><button className="primary device-pending-action" aria-busy={busy} disabled={busy} onClick={()=>void run()}>{busy?"Switching…":"Enable TCP and reconnect"}</button>
+ <button disabled={busy} onClick={()=>setConfirm(false)}>Cancel</button></div></div>}
  {error&&<p role="alert">{error}</p>}</div>;
 }

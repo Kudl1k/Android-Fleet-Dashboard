@@ -1,0 +1,72 @@
+# Frontend review and validation — 2026-10-21
+
+Scope: application shell, fleet overview and details, management, alerts, operations, audit, and SSH connections. Existing uncommitted changes in App.tsx and FleetPage.tsx were retained and completed. Routes, request contracts, permission checks, device capabilities, and backend behavior remain intact. No dependency was added.
+
+## Audit findings
+
+The review used the installed UI UX Pro Max, Frontend Design, Impeccable, Web Design Guidelines, React Best Practices, and Composition Patterns guidance. The operational use case and established component system took precedence over generic generated style suggestions. The [Vercel interface guidelines](https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md) informed the accessibility and interaction checks.
+
+| Priority | Location | Finding and impact | Resolution |
+| --- | --- | --- | --- |
+| P1 | `frontend/src/App.tsx` / `styles.css` | Mobile-menu markup had no matching responsive styles; its toggle appeared on desktop and navigation remained expanded on phones. | Added a responsive disclosure, Escape handling, and focus return; desktop retains its navigation rail. |
+| P1 | `frontend/src/App.tsx` | Dialog autofocus prevented reliable capture of the opening control for focus restoration. | Capture the opener before mounting the dialog; regression tested. |
+| P1 | `frontend/src/styles.css` | Input and secondary-button boundaries lacked sufficient contrast. | Separate control-boundary tokens from decorative panel borders. |
+| P2 | `frontend/src/App.tsx` | Route changes retained the previous view's scroll position and keyboard focus. | Reset scroll and focus main content when the pathname changes; update document titles. |
+| P2 | `frontend/src/styles.css` | Repeated 8–11px text, small controls, and uppercase labels weakened hierarchy and legibility. | Increased supporting text sizes, standardized control heights, sentence-case table headings, and tabular numerals. |
+| P2 | `frontend/src/features/fleet/FleetPage.tsx` / `styles.css` | Search icon, results heading, and access notice lacked layout styles; repetitive summary cards consumed vertical space. | Aligned search and counts, composed an access notice, and consolidated the status summary. |
+| P2 | Management, alerts, operations, audit, SSH tables | Overflow containers lacked a keyboard focus target. | Named focusable regions; verified horizontal arrow-key scrolling. |
+| P2 | Operations / audit | Empty histories displayed an impossible `1–0 of 0` range. | Display `0–0 of 0`. |
+| P2 | SSH connections | Empty and filtered-empty registries rendered only column headings. | Added distinct explanatory messages and regression coverage. |
+| P2 | Shared CSS | Long device names, actor identities, and form controls could crowd narrow layouts. | Wrapping headings/actions, shrinkable children, responsive form grids, bounded identifiers, and contained tables. |
+
+Preserved strengths: lazy route loading, TanStack Query request ownership, memoized device cards, explicit unavailable/stale telemetry, native form controls and dialogs, permission-driven actions, and accessible chart observation tables. No new state framework or component abstraction was necessary.
+
+## Verification
+
+- Collaborative-browser visual inspection at 1280px/1440px desktop and 390px phone widths, in light and dark themes. Layout overflow also checked at 320px. Fleet, device detail, management, alerts, operations, audit, and SSH routes were exercised; this was viewport emulation, not a physical-device touch test.
+- Read-only in-memory browser fixtures covered online, offline, unauthorized, rooted/non-rooted devices, missing observations, long names, no search matches, empty histories and SSH profiles, and a long-identity audit row. API fixtures were temporary browser instrumentation, not application code or a new unauthenticated endpoint.
+- Verified menu Tab/Escape behavior, visible keyboard focus, access-dialog Escape and focus return, search/clear filters, route scroll/focus, and audit-table ArrowRight scrolling (40px within a 320px region). Page overflow remained contained in the inspected layouts.
+- Calculated palette contrast: dark/light primary text on panel 15.17/15.58; secondary text on panel 7.16/6.06; control boundary on background 3.24/3.16; primary-action text 7.96/6.21. These are token-pair checks, not a claim of full WCAG conformance.
+- Frontend lint, TypeScript, production build, and diff whitespace checks passed. Vitest passed all 104 tests across 19 files with the Node 25 compatibility flag. Static Impeccable detection returned no findings.
+
+## Remaining limits
+
+- The existing Vite proxy to port 9000 returned 500s because the manager was unavailable. Real API-backed authentication, hardware control, terminal sessions, and live screen playback were not end-to-end validated in this pass. Existing fixture-based tests remain the functional evidence for those paths.
+- Node 25 exposes experimental web storage that conflicts with this project's jsdom setup. Run tests with `NODE_OPTIONS=--no-experimental-webstorage npm test` on that runtime. The suite also emits existing jsdom canvas warnings.
+- The build reports an existing terminal bundle over 500kB. Route splitting remains in place; terminal/chart bundle optimization is a separate performance task.
+- The collaborative browser disconnected during the final intermediate-width sweep. No complete final 768px/1024px browser sweep, physical touch, assistive-technology, or cross-browser conformance claim is made. Desktop and phone visual and keyboard checks above completed before disconnect.
+
+## Device workspace refinement — 2026-10-21
+
+The detail view now prioritizes identity, connection state, telemetry freshness, and available observations. A single collection timestamp replaces the repeated timestamps. The overview shows up to four useful observations; sparse collections still surface an available value, and a missing/zero total never produces an invented utilization ratio. Performance, memory/storage, battery/thermal, and network observations have separate native disclosures. Missing sources are listed once as “not observed,” without asserting they are permanently unsupported.
+
+Identity/capabilities, history, and tools use progressive disclosure. History loads on first opening and retains its time range. All existing charts, recorded runs, controls, setup and connection actions remain accessible. Live screen and terminal stay mounted during collapse; the stream state remains visible in its summary. Native summary focus is explicit. Workspace state resets on a device route change. Confirmation dialogs now retain their opener through React StrictMode replay and close before focus restoration, fixing the setup-dialog cancellation issue found in the browser.
+
+Validation for this refinement:
+
+- Frontend suite: **120 tests across 20 files passed**, using `NODE_OPTIONS=--no-experimental-webstorage npm test`. Added page interaction/state tests, sparse and zero-valued observations, history range retention, tool DOM preservation, real mocked stream persistence/cleanup, and StrictMode modal focus restoration. The existing jsdom canvas warning remains.
+- ESLint, TypeScript, production build, diff whitespace check, and the focused Impeccable layout scan passed. The existing terminal bundle-size warning remains; no package or backend requirement was added.
+- Inspected rendered light/dark desktop and phone layouts, plus a 768px tablet layout. Checked document overflow at 320, 390, 768 and 1440px; no page-wide overflow in the inspected states. At 320px all disclosures were opened. Long names, endpoints and capabilities were checked at phone width. Browser fixtures also verified that stale telemetry withholds current values while the connection badge can remain online.
+- Exercised disclosure click/Enter and keyboard focus, History shortcut expansion and available ranges, setup confirmation/cancel and focus restoration, tool discovery, and explicit live-screen request failure feedback. Unit fixtures verify live screen stream/socket/decoder retention during collapse and cleanup on unmount; terminal draft retention during polling and collapse is covered at the page boundary, alongside the existing terminal lifecycle suite.
+
+Limits: the local manager on port 9000 was unavailable, so browser checks used temporary in-memory API fixtures; these were not added to application code. Real authentication, successful hardware video/terminal sessions, app installation and device power actions were not end-to-end tested. Browser checks use viewport emulation, not physical touch or assistive-technology testing. The first preview tab timed out; a fresh collaborative tab supported the subsequent checks. Existing unrelated working-tree changes were retained. No commit or push was made.
+
+## Device action composition pass — 2026-10-21
+
+Focused refinement of device detail and embedded tools. Initial inspection found a flat mixed control/reboot toolbar, a 70.5px refresh button stretched beside a labelled search field, right-aligned setup actions separated from their instructions, and terminal connection/program/session controls sharing undifferentiated action rows.
+
+Replaced these with named inspection, screen-power and restart groups; explicit form rows; adjacent package-action subgroups; and separate terminal connection, program and session compositions. Primary task actions, neutral secondary controls and destructive controls now have distinct weight. Setup confirmations use consistent trailing action footers. Connection settings sits in the connection heading. Inputs/selects and ordinary buttons measure 44px; icons inside text buttons use 16px. New styles target explicit classes or the device workspace, leaving the generic `.actions` contract intact. Backend requests, permissions, confirmation conditions and session lifecycles are unchanged.
+
+Validation: frontend tests, lint, typecheck, build and whitespace checks passed. Added tests cover named device groups and cancellation, pending duplicate prevention, terminal connection/session separation and screen action groups. The suite contains 124 passing tests. Existing canvas and bundle-size warnings remain. Browser fixtures covered enabled, offline and pending/error states, long device/host/SSH names, desktop input/button axes, and narrow layouts. TCP confirmation measured 220px before and during its pending label; busy/disabled feedback remained accurate. At 320/390px no page-wide overflow or buttons below 44px were found in the inspected open tools. Desktop controls were visually inspected in light/dark themes. Native preview snapshots failed at phone sizes, so mobile light/dark visual inspection used frames from the collaborative browser's own recordings instead. No external browser automation was used. Successful hardware actions were not executed because the local manager remains unavailable.
+
+## Device list rows and scrolling pass — 2026-10-21
+
+Inspected the rendered telemetry, application and tool lists before editing. The old layout right-aligned textual states, let units drift with number width, allowed package names to influence table columns, and left operations/session histories unbounded.
+
+Added stable definition-list columns, number/unit alignment and left-aligned identity/state text. Long identifiers remain fully readable. Capabilities, operation records and session histories use list semantics; application and observation tables retain table semantics. Applications stack into labelled rows on phones. Operation results remain accessible through native disclosures, and state/duration/action slots share stable axes. Existing action groups, authentication/permission checks, confirmations and streaming/session ownership are preserved.
+
+`ListRegion` bounds long content to the viewport while leaving short content at its natural height. It provides a named keyboard target, visible scrollbar styling, inset focus and an overflow hint measured with ResizeObserver. Headers, counts and search remain outside; table column headers stay sticky. Nested regions in expanded results defer scrolling to the outer list. No scroll position is set during data updates. Added session search and distinct loading/error/empty history presentation; application search has a specific no-match state. No backend contract or dependency changed.
+
+Verification: 131 tests across 22 files passed; lint, typecheck, build, whitespace check and focused layout detection passed. New coverage includes real zero/unit/duration formatting, full sensor labels, scroll-target preservation across updates, actual-overflow hint/cleanup, no-match filtering, history failures and unchanged session actions. Existing canvas and terminal bundle warnings remain.
+
+Browser validation used temporary fixtures: 73 performance observations, 100 long application names, 30 mixed operation records, 45 session records, 40 capabilities and historical observations with accessible tables. Inspected desktop (1440px) and phone (390px) light/dark renders using native preview recordings; checked settled layout at 320px without page-wide overflow. Verified natural short-list height (320px for 320px of content), sticky application headers, native keyboard/wheel scrolling, and scroll persistence through polling (applications 350px; telemetry 240px). Long identity/serial strings and unknown root/last-seen values were inspected on phones. Hardware-backed authentication, successful device actions and physical touch/assistive technology were not end-to-end tested; the local manager was unavailable. No commit or push was made.

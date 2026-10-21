@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Smartphone } from "lucide-react";
+import { ArrowUpRight, Plus, Search, Smartphone } from "lucide-react";
 import { useDevices, useMetrics } from "../../lib/hooks";
 import { formatMetric, metricValue, type Device } from "../../lib/api";
 export function fleetGroup(device: Device): string {
@@ -44,12 +44,12 @@ export const DeviceCard = memo(function DeviceCard({
         <Link className="device-card panel" to={`/devices/${encodeURIComponent(device.id)}`}>
             <div className="row">
                 <div className="device-icon">
-                    <Smartphone size={22} />
+                    <Smartphone size={22} aria-hidden="true" />
                 </div>
                 <span className={`badge ${fleetGroup(device)}`}>
                     {device.state.replaceAll("_", " ")}
                 </span>
-                <ArrowUpRight size={18} className="muted" />
+                <ArrowUpRight size={18} className="muted" aria-hidden="true" />
             </div>
             <h2>{device.name}</h2>
             <p className="muted">
@@ -138,7 +138,6 @@ export default function FleetPage() {
         <>
             <div className="page-heading">
                 <div>
-                    <p className="eyebrow">FLEET MONITORING</p>
                     <h1>Fleet overview</h1>
                     <p className="muted">
                         Your Android devices, observed through authenticated
@@ -146,13 +145,13 @@ export default function FleetPage() {
                     </p>
                 </div>
                 <Link className="button primary" to="/management">
-                    Register device
+                    <Plus size={17} aria-hidden="true" /> Register device
                 </Link>
             </div>
-            <div className="summary-grid">
+            <div className="summary-grid" aria-label="Fleet status">
                 {["total", "online", "offline", "degraded"].map((group) => (
                     <div className="panel summary" key={group}>
-                        <span>{group} devices</span>
+                        <span><i className={`status-dot ${group}`} aria-hidden="true" />{group === "total" ? "Total" : group[0].toUpperCase() + group.slice(1)} devices</span>
                         <strong>
                             {devices.data
                                 ? group === "total"
@@ -162,18 +161,20 @@ export default function FleetPage() {
                                       ).length
                                 : "—"}
                         </strong>
-                        <i className={`status-dot ${group}`} />
                     </div>
                 ))}
             </div>
             <div className="toolbar panel">
-                <label className="search">
+                <label className="search" htmlFor="device-search">
                     Search devices
-                    <input
+                    <span className="search-input"><Search size={17} aria-hidden="true" /><input
+                        id="device-search"
+                        name="device-search"
+                        type="search"
                         placeholder="Name, model or IP address"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                    />
+                    /></span>
                 </label>
                 <label>
                     Connection
@@ -199,8 +200,9 @@ export default function FleetPage() {
                     </select>
                 </label>
             </div>
+            <div className="results-heading"><h2>Devices</h2><span className="muted" role="status">{devices.data ? `${visible.length} of ${devices.data.length} devices` : "Awaiting fleet data"}</span></div>
             {devices.isPending ? (
-                <div className="device-grid" aria-label="Loading devices">
+                <div className="device-grid" role="status" aria-label="Loading devices">
                     {[1, 2, 3].map((n) => (
                         <div className="panel skeleton" key={n} />
                     ))}
@@ -221,7 +223,7 @@ export default function FleetPage() {
                 </div>
             ) : (
                 <div className="panel empty">
-                    <Smartphone size={36} />
+                    <Smartphone size={36} aria-hidden="true" />
                     <h2>
                         {devices.data?.length
                             ? "No matching devices"
@@ -232,6 +234,7 @@ export default function FleetPage() {
                             ? "Try a different search or connection filter."
                             : "Register an already authorized device to start monitoring."}
                     </p>
+                    {devices.data?.length ? <button onClick={() => { setSearch(""); setState("all"); }}>Clear filters</button> : <Link className="button" to="/management"><Plus size={17} aria-hidden="true" /> Register device</Link>}
                 </div>
             )}
         </>

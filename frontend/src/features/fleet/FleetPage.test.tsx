@@ -104,5 +104,8 @@ describe("fleet", () => {
             { target: { value: "absent" } },
         );
         expect(screen.getByText("No matching devices")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+        expect(screen.getByText("Alpha")).toBeInTheDocument();
+        expect(screen.getByRole("searchbox", { name: "Search devices" })).toHaveValue("");
     });
 });

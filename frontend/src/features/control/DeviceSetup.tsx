@@ -18,10 +18,10 @@ export default function DeviceSetup({id,online}:{id:string;online:boolean}) {
   setConfirm(null);await client.invalidateQueries({queryKey:["operations"]});
  }catch(err){setError(err instanceof Error?err.message:"Setup could not start");}finally{setBusy(false);}}
  if(!allowed)return null;
- return <section className="panel"><h2>F-Droid, Termux &amp; SSH</h2>
+ return <section className="panel device-setup"><h2>F-Droid, Termux &amp; SSH</h2>
  <p>Install F-Droid and Termux, then enable SSH on port 8022 with a key managed by this dashboard. No root is required. Fleet monitoring continues over ADB.</p>
  <p>Keep the device unlocked and Termux visible during setup. Approve any Android prompts and wait for its shell prompt. Setup can take several minutes.</p>
- <div className="actions"><button disabled={!online||busy||running} onClick={()=>setConfirm("setup.termux")}>Install F-Droid, Termux &amp; SSH</button>
+ <div className="actions device-actions"><button className="primary" disabled={!online||busy||running} onClick={()=>setConfirm("setup.termux")}>Install F-Droid, Termux &amp; SSH</button>
  <button disabled={!online||busy||running} onClick={()=>setConfirm("setup.ssh")}>Enable Termux SSH</button></div>
  {error&&<p role="alert" className="error">{error}</p>}
  {setup&&<div><p role="status">{setup.state} · {String(setup.result?.stage??"Device setup")}</p>
@@ -30,7 +30,7 @@ export default function DeviceSetup({id,online}:{id:string;online:boolean}) {
  {confirm&&<Confirmation title={confirm==="setup.termux"?"Install apps and enable SSH":"Enable Termux SSH"} onCancel={()=>{if(!busy)setConfirm(null);}}>
  <p>{confirm==="setup.termux"?"Downloads verified APKs from F-Droid and installs missing apps. Existing apps and their data are kept. ":"Uses the installed Termux app. "}Setup types a configuration script into the foreground Termux terminal. Leave it at an idle shell prompt and do not type or switch apps while setup runs.</p>
  <p>This installs OpenSSH, authorizes a dashboard-managed key, disables SSH password login and restarts Termux SSH on port 8022. Existing Termux SSH sessions will close. Android may stop the server after reboot or in the background.</p>
- <button disabled={busy} onClick={()=>setConfirm(null)}>Cancel</button><button disabled={busy} onClick={()=>void start()}>{busy?"Starting…":"Confirm setup"}</button>
+ <div className="actions device-dialog-actions"><button disabled={busy} onClick={()=>setConfirm(null)}>Cancel</button><button className="primary device-pending-action" aria-busy={busy} disabled={busy} onClick={()=>void start()}>{busy?"Starting…":"Confirm setup"}</button></div>
  </Confirmation>}
  </section>;
 }

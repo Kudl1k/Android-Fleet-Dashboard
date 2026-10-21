@@ -235,7 +235,7 @@ export default function ManagementPage() {
                 {devices.data?.length === 0 && (
                     <p>No registered devices. Add a connection above.</p>
                 )}
-                <div className="table-wrap">
+                <div className="table-wrap" tabIndex={0} role="region" aria-label="Registered connections">
                     <table>
                         <thead>
                             <tr>

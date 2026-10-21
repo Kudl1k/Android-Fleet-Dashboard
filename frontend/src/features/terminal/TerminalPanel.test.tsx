@@ -1,4 +1,4 @@
-import {fireEvent,render,screen,waitFor,cleanup} from "@testing-library/react";
+import {fireEvent,render,screen,waitFor,cleanup,within} from "@testing-library/react";
 import {afterEach,beforeEach,expect,it,vi} from "vitest";
 import TerminalPanel, {chunkTerminalInput} from "./TerminalPanel";
 import {request} from "../../lib/api";
@@ -51,10 +51,12 @@ it("closes a detached session directly from history",async()=>{
   return {};
  });
  render(<TerminalPanel/>);
- await screen.findByText("ssh — active");
+ const history = await screen.findByRole("region", {name: "Sessions and recorded results"});
+ await within(history).findByText("active");
+ fireEvent.click(within(history).getByText("ssh"));
  fireEvent.click(screen.getByText("Close session"));
  await waitFor(()=>expect(request).toHaveBeenCalledWith("/api/v1/terminal/sessions/detached",{method:"DELETE"}));
- await screen.findByText("ssh — closed");
+ await within(history).findByText("closed");
  expect(screen.queryByText("Resume session")).not.toBeInTheDocument();
 });
 
@@ -64,4 +66,41 @@ it("records linked device statistics at a 15 second interval",async()=>{
  expect(screen.getByLabelText("Record device statistics (15 seconds)")).toBeChecked();
  fireEvent.click(screen.getByText("Record run"));
  await waitFor(()=>expect(request).toHaveBeenCalledWith("/api/v1/terminal/sessions",expect.objectContaining({body:JSON.stringify({connection_type:"ssh",profile_id:"ssh1",command:"benchmark",record_device:true,sample_interval:15,cols:80,rows:24})})));
+});
+
+it("keeps connection methods named and closes a session only from its own tools", async () => {
+ render(<TerminalPanel deviceId="d1" />);
+ const adb = screen.getByRole("group", {name: "ADB shell"});
+ expect(within(screen.getByRole("group", {name: "SSH connection"})).getByRole("combobox", {name: "SSH connection"})).toBeInTheDocument();
+ fireEvent.click(within(adb).getByRole("button", {name: "Open ADB Shell"}));
+ await waitFor(()=>expect(connections).toHaveLength(1));
+ const tools = screen.getByRole("group", {name: "Terminal session tools"});
+ expect(within(tools).getByRole("button", {name: "Copy selection"})).toBeInTheDocument();
+ expect(within(tools).queryByRole("button", {name: "Close session"})).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button", {name: "Close session"}));
+ await waitFor(()=>expect(request).toHaveBeenCalledWith("/api/v1/terminal/sessions/session", {method: "DELETE"}));
+});
+
+it("filters device session history without starting or closing sessions", async () => {
+ vi.mocked(request).mockImplementation(async path=>path.endsWith("/profiles") ? [] : {items: [{id:"one",device_id:"d1",connection_type:"ssh",command:"python benchmark-with-a-long-command.py",state:"closed"},{id:"two",device_id:"d1",connection_type:"adb",state:"active"},{id:"other",device_id:"d2",connection_type:"ssh",state:"active"}]});
+ render(<TerminalPanel deviceId="d1" />);
+ const region=screen.getByRole("region", {name:"Sessions and recorded results"});
+ await within(region).findByText("python benchmark-with-a-long-command.py");
+ expect(within(region).queryByText("other")).not.toBeInTheDocument();
+ expect(within(region).queryByRole("searchbox")).not.toBeInTheDocument();
+ fireEvent.change(screen.getByLabelText("Search sessions"), {target:{value:"benchmark"}});
+ expect(within(region).getAllByRole("listitem")).toHaveLength(1);
+ fireEvent.click(within(region).getByText("python benchmark-with-a-long-command.py"));
+ expect(within(region).getByRole("button", {name:"Download results"})).toBeInTheDocument();
+ fireEvent.change(screen.getByLabelText("Search sessions"), {target:{value:"no-match"}});
+ expect(within(region).getByText("No sessions match this search.")).toBeInTheDocument();
+ expect(vi.mocked(request).mock.calls.some(([, options])=>options?.method==="POST"||options?.method==="DELETE")).toBe(false);
+});
+
+it("distinguishes a failed session-history request from an empty history", async () => {
+ vi.mocked(request).mockImplementation(async path=>{if(path==="/api/v1/terminal/sessions")throw new Error("History request failed");return [];});
+ render(<TerminalPanel deviceId="d1" />);
+ expect(screen.getByText("Loading session history…")).toBeInTheDocument();
+ expect(await screen.findByRole("alert")).toHaveTextContent("History request failed");
+ expect(screen.queryByText("No sessions or recorded results for this device.")).not.toBeInTheDocument();
 });

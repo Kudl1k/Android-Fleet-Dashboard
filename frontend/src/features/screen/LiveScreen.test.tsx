@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import LiveScreen from "./LiveScreen";
 import { request } from "../../lib/api";
@@ -8,6 +8,13 @@ vi.mock("../../lib/auth", () => ({ useAuth: () => auth }));
 vi.mock("../../lib/api", () => ({ request: vi.fn() }));
 beforeEach(() => { permissions = ["screen:view"]; vi.clearAllMocks(); HTMLCanvasElement.prototype.getContext = vi.fn(() => null); });
 describe("live screen permission and lifecycle", () => {
+    it("groups playback separately from screen interaction and Android navigation", () => {
+        render(<LiveScreen id="d" online />);
+        expect(within(screen.getByRole("group", {name: "Stream playback"})).getByRole("button", {name: "Start view-only"})).toBeEnabled();
+        expect(within(screen.getByRole("group", {name: "Screen interaction"})).getByRole("button", {name: "Request control"})).toBeDisabled();
+        expect(within(screen.getByRole("group", {name: "Android navigation"})).getByRole("button", {name: "Home"})).toBeDisabled();
+        expect(request).not.toHaveBeenCalled();
+    });
     it("withholds the stream UI without viewing permission", () => { permissions = []; render(<LiveScreen id="d" online />); expect(screen.getByText("Screen viewing permission is required.")).toBeInTheDocument(); expect(request).not.toHaveBeenCalled(); });
     it("keeps view-only canvas unfocusable and input/navigation disabled", () => { render(<LiveScreen id="d" online />); expect(screen.getByLabelText("Live Android screen, view-only")).toHaveAttribute("tabindex", "-1"); expect(screen.getByRole("button", { name: "Request control" })).toBeDisabled(); expect(screen.getByRole("button", { name: "Home" })).toBeDisabled(); });
     it("does not start offline devices", () => { render(<LiveScreen id="d" online={false} />); expect(screen.getByRole("button", { name: "Start view-only" })).toBeDisabled(); });
@@ -36,11 +43,11 @@ class FakeDecoder {
     static isConfigSupported = vi.fn(async () => ({ supported: true }));
     constructor(public callbacks: { output: (frame: VideoFrame) => void; error: (error: Error) => void }) { FakeDecoder.current = this; }
 }
-async function connected() {
+async function connected(onStateChange?: (state: string) => void) {
     permissions.push("screen:control");
     vi.stubGlobal("VideoDecoder", FakeDecoder); vi.stubGlobal("WebSocket", FakeSocket); vi.stubGlobal("isSecureContext", true);
     vi.mocked(request).mockImplementation(async path => path.endsWith("/ticket") ? { ticket: "private" } : { id: "session", state: "starting" });
-    const view = render(<LiveScreen id="d" online />);
+    const view = render(<details open><summary>Screen tool</summary><LiveScreen id="d" online onStateChange={onStateChange} /></details>);
     fireEvent.click(screen.getByRole("button", { name: "Start view-only" }));
     await waitFor(() => expect(FakeSocket.current).toBeDefined());
     const { act } = await import("@testing-library/react");
@@ -50,6 +57,23 @@ async function connected() {
 }
 describe("connected player interaction", () => {
     beforeEach(() => { FakeSocket.current = undefined as unknown as FakeSocket; });
+    it("reports stream status while a disclosure preserves the session until route cleanup", async () => {
+        const status = vi.fn();
+        const { view } = await connected(status);
+        expect(status).toHaveBeenLastCalledWith("streaming");
+        const socket = FakeSocket.current;
+        const canvas = screen.getByLabelText("Live Android screen, view-only");
+        fireEvent.click(screen.getByText("Screen tool"));
+        expect(socket.close).not.toHaveBeenCalled();
+        expect(vi.mocked(request).mock.calls.some(([, options]) => options?.method === "DELETE")).toBe(false);
+        fireEvent.click(screen.getByText("Screen tool"));
+        expect(screen.getByLabelText("Live Android screen, view-only")).toBe(canvas);
+        expect(FakeSocket.current).toBe(socket);
+        view.unmount();
+        expect(socket.close).toHaveBeenCalled();
+        expect(request).toHaveBeenCalledWith("/api/v1/screen/sessions/session", {method: "DELETE"});
+        vi.unstubAllGlobals();
+    });
     it("waits for the previous DELETE before starting a replacement session", async () => {
         const { view, act } = await connected();
         let finish!: (value: unknown) => void;
