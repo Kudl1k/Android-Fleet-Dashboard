@@ -2,8 +2,9 @@
 
 React 19, TypeScript and Vite provide the M3 dashboard. TanStack Query handles
 independent cached polling, React Router handles navigation, Recharts renders
-history, and Lucide supplies icons. Shared CSS design tokens and native form/dialog
-controls keep the application small without a second component framework.
+history, and Lucide supplies icons. Device details use source-owned shadcn/ui (Radix Nova)
+components, themed through the existing slate-and-blue tokens. Other routes migrate
+incrementally. Tailwind v4 utilities run without Preflight to preserve the existing shell.
 
 Requires Node 22+ and a running backend at http://127.0.0.1:9000.
 
@@ -56,6 +57,25 @@ See [design direction](../DESIGN.md) and the [UI review and validation](../docs/
 
 Device details prioritize connection status, one collection/freshness area, and up to four available key observations. Expand Performance, Memory & storage, Battery & thermal, or Network to inspect details; Metric availability lists sources missing from the latest collection. Network observations remain cumulative counters, not rates. Missing, stale, disconnected, loading and failed collections are distinct states; failed connection checks also withhold cached current values.
 
-Use the History link or Historical telemetry disclosure for the existing ranges and recorded-run charts. History starts loading when first opened and retains the selected range after collapse. Device tools contains Live screen, Terminal, Device controls, and Setup & connectivity. Setup remains optional; monitoring uses authenticated ADB. Live screen and terminal remain mounted when collapsed. Stream status is visible in the live-screen summary; use Stop stream or Close session to finish. Route changes and authentication changes retain the existing tool cleanup behavior.
+Use the Overview, History and Device tools tabs to switch tasks. History starts loading on first selection and retains its range. Device tools contains Live screen, Terminal, Device controls, and Setup & connectivity. Setup remains optional; monitoring uses authenticated ADB. All tool and terminal-tab content stays mounted while hidden. The workspace tab shows screen status and the open terminal-tab count; tool summaries also expose session context. Use Stop stream or Close session to finish. Route changes, authentication changes and browser-tab visibility retain the existing cleanup policies.
 
 On Node 25, run tests with `NODE_OPTIONS=--no-experimental-webstorage npm test` to avoid the runtime's experimental web-storage conflict with jsdom.
+
+## Extending the UI
+
+`components.json` configures shadcn's Radix Nova registry and `@/` alias. Add only
+needed components with `npx shadcn@latest add <component>`. Use individual imports
+from `src/components/ui`; shared recipes and semantic token aliases live in
+`src/ui.css`, while `src/styles.css` owns shell and feature layout. Do not add a
+second theme, a global reset, a font download or parallel native-control wrappers.
+Inspect generated changes: preserve the local `cn()` import, 44px control targets,
+existing palette and no-Preflight setup. The generated Table intentionally leaves
+overflow to ListRegion. ScrollArea exposes viewport props/ref for named keyboard
+regions and measurement.
+
+[DESIGN.md](../DESIGN.md) documents component composition, field validation,
+confirmation focus, session lifecycle and legacy CSS compatibility. Component APIs:
+[Tabs](https://ui.shadcn.com/docs/components/radix/tabs),
+[Collapsible](https://ui.shadcn.com/docs/components/radix/collapsible),
+[Scroll Area](https://ui.shadcn.com/docs/components/radix/scroll-area),
+[Alert Dialog](https://ui.shadcn.com/docs/components/radix/alert-dialog).

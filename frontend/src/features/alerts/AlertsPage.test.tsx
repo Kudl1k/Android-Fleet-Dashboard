@@ -175,9 +175,15 @@ describe("alerts", () => {
         fireEvent.change(screen.getByLabelText("Condition"), {
             target: { value: "cpu_high" },
         });
-        expect(screen.getByLabelText("Threshold (ratio (0–1))")).toHaveValue(0.9);
-        fireEvent.click(screen.getByRole("button", { name: /Acknowledge Samsung/ }));
-        await waitFor(() => expect(toast).toHaveBeenCalledWith("Alert acknowledged", "success"));
+        expect(screen.getByLabelText("Threshold (ratio (0–1))")).toHaveValue(
+            0.9,
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: /Acknowledge Samsung/ }),
+        );
+        await waitFor(() =>
+            expect(toast).toHaveBeenCalledWith("Alert acknowledged", "success"),
+        );
         expect(screen.getByLabelText("Rule name")).toHaveValue("CPU watch");
     });
     it("loads an existing rule for editing and confirms deletion", async () => {
@@ -226,7 +232,7 @@ describe("alerts", () => {
         fireEvent.click(
             screen.getByRole("button", { name: "Delete Battery watch" }),
         );
-        expect(screen.getByRole("dialog")).toHaveTextContent(
+        expect(screen.getByRole("alertdialog")).toHaveTextContent(
             "Delete Battery watch?",
         );
         fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));

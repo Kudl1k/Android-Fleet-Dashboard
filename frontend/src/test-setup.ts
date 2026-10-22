@@ -9,3 +9,12 @@ HTMLDialogElement.prototype.close = function () {
     this.open = false;
     this.dispatchEvent(new Event("close"));
 };
+
+// Radix measures viewport and content; jsdom intentionally has no layout engine.
+if (!globalThis.ResizeObserver) {
+    globalThis.ResizeObserver = class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+    };
+}

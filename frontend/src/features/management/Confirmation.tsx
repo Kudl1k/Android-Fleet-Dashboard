@@ -1,4 +1,12 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+import {
+    AlertDialog,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 export default function Confirmation({
     title,
     children,
@@ -8,27 +16,37 @@ export default function Confirmation({
     children: ReactNode;
     onCancel: () => void;
 }) {
-    const dialog = useRef<HTMLDialogElement>(null);
-    // Capture before child autofocus and keep the opener through StrictMode replay.
-    const opener = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
-    useEffect(() => {
-        const element = dialog.current;
-        const previous = opener.current;
-        element?.showModal();
-        return () => {
-            if (element?.open) element.close();
-            if (previous?.isConnected) previous.focus();
-        };
-    }, []);
+    const opener = useRef(
+        document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null,
+    );
     return (
-        <dialog
-            ref={dialog}
-            className="panel"
-            aria-label={title}
-            onCancel={onCancel}
+        <AlertDialog
+            open
+            onOpenChange={(open) => {
+                if (!open) onCancel();
+            }}
         >
-            <h2>{title}</h2>
-            {children}
-        </dialog>
+            <AlertDialogContent
+                onOpenAutoFocus={(event) => {
+                    event.preventDefault();
+                    const content = event.currentTarget as HTMLElement;
+                    content.querySelector<HTMLButtonElement>("button")?.focus();
+                }}
+                onCloseAutoFocus={(event) => {
+                    event.preventDefault();
+                    if (opener.current?.isConnected) opener.current.focus();
+                }}
+            >
+                <AlertDialogHeader>
+                    <AlertDialogTitle>{title}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Review the action before confirming.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="confirmation-body">{children}</div>
+            </AlertDialogContent>
+        </AlertDialog>
     );
 }

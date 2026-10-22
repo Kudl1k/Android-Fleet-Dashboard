@@ -11,7 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ManagementPage from "./ManagementPage";
 import { request } from "../../lib/api";
 vi.mock("../../lib/api", () => ({ request: vi.fn() }));
-const defaultCan = (permission: string) => Boolean(auth.token) && permission !== "security.manage";
+const defaultCan = (permission: string) =>
+    Boolean(auth.token) && permission !== "security.manage";
 const auth = { token: "", setToken: vi.fn(), can: defaultCan };
 vi.mock("../../lib/auth", () => ({ useAuth: () => auth }));
 vi.mock("../../lib/toast", () => ({ useToast: () => vi.fn() }));
@@ -120,7 +121,9 @@ describe("device management", () => {
         fireEvent.click(screen.getByText("Connection troubleshooting"));
         expect(screen.getByText(/Connection failed/)).toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", { name: "Remove Samsung" }));
-        expect(screen.getByRole("dialog")).toHaveTextContent("Remove Samsung?");
+        expect(screen.getByRole("alertdialog")).toHaveTextContent(
+            "Remove Samsung?",
+        );
         expect(request).not.toHaveBeenCalledWith(
             "/api/v1/devices/d1",
             expect.objectContaining({ method: "DELETE" }),
@@ -139,12 +142,24 @@ describe("device management", () => {
         auth.token = "admin-session";
         auth.can = () => true;
         vi.mocked(request).mockImplementation(async (path, options) => {
-            if (path === "/api/v1/pairing/allowed-networks" && !options?.method) {
+            if (
+                path === "/api/v1/pairing/allowed-networks" &&
+                !options?.method
+            ) {
                 return { networks: [] } as never;
             }
-            if (path === "/api/v1/pairing/allowed-networks" && options?.method === "POST") {
+            if (
+                path === "/api/v1/pairing/allowed-networks" &&
+                options?.method === "POST"
+            ) {
                 return {
-                    networks: [{ network: "10.42.0.0/24", created_at: 1, created_by: "admin" }],
+                    networks: [
+                        {
+                            network: "10.42.0.0/24",
+                            created_at: 1,
+                            created_by: "admin",
+                        },
+                    ],
                 } as never;
             }
             return [] as never;
@@ -153,7 +168,9 @@ describe("device management", () => {
         fireEvent.change(await screen.findByLabelText("Private IP or CIDR"), {
             target: { value: "10.42.0.0/24" },
         });
-        fireEvent.click(screen.getByRole("button", { name: "Approve network" }));
+        fireEvent.click(
+            screen.getByRole("button", { name: "Approve network" }),
+        );
         expect(await screen.findByText("10.42.0.0/24")).toBeInTheDocument();
         expect(request).toHaveBeenCalledWith(
             "/api/v1/pairing/allowed-networks",

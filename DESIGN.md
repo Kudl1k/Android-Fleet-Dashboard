@@ -1,16 +1,16 @@
 # Android Fleet interface
 
-The dashboard is an operational workspace for finding Android devices, assessing connection and telemetry state, and taking permitted actions. Keep the existing React, native HTML controls, Lucide icons, and CSS component classes. Preserve the authenticated ADB model and capability-driven controls.
+The dashboard is an operational workspace for finding Android devices, assessing connection and telemetry state, and taking permitted actions. Preserve authenticated ADB, capability-driven controls, React, and Lucide icons. New and migrated device UI uses the source-owned shadcn/ui components in `frontend/src/components/ui` (Radix Nova). Other routes migrate incrementally; do not build another set of controls.
 
 ## Direction
 
-Refine the existing slate-and-blue interface. Give device identity, connection state, and observation freshness priority over decoration. Use one clear page heading and a specific primary action. Group fleet counts in one status strip rather than four unrelated cards. Use panels for distinct tasks, not every text group.
+Keep the slate-and-blue identity. Device identity, connection state, observation freshness and the next useful action outrank decoration. Use panels for distinct tasks, not individual readings. The fleet keeps its consolidated status strip.
 
-Desktop layout: navigation rail → page context and workspace controls → page heading and action → status and filters → devices or records. Below 760px, use a collapsible navigation disclosure, wrapping headings, stacked forms, and a two-column status strip. Keep long identities readable and horizontal table scrolling contained within its region.
+Desktop layout: navigation rail → workspace controls → page heading and action → monitoring or task content. Below 760px, navigation becomes a disclosure, forms stack, actions wrap, and key observations use two columns. Long identities remain readable. Horizontal overflow belongs to a named data region, never the whole page.
 
-## Tokens and components
+## Tokens and component ownership
 
-`frontend/src/styles.css` owns both themes and shared component styles.
+`frontend/src/styles.css` owns the incumbent palette, shell and feature layout. `frontend/src/ui.css` maps those tokens onto shadcn semantic roles and owns shared component recipes. `frontend/components.json` records the registry configuration and `@/` aliases. Tailwind v4 runs through the Vite plugin, with theme and utility imports only; **do not add Preflight or another global reset**. Legacy native-control rules exclude elements with `data-slot`; the legacy `.grid` recipe also excludes shadcn slots. This prevents cascading conflicts with component utilities.
 
 | Role | Dark | Light |
 | --- | --- | --- |
@@ -21,41 +21,40 @@ Desktop layout: navigation rail → page context and workspace controls → page
 | Accent (`--accent`) | #6daaff | #175dc2 |
 | Control boundary (`--control-border`) | #56667e | #7c8ca3 |
 
-Use `--on-accent` for primary-action text. Keep green for online/success, amber for degraded/warning, and red for errors, always with text. Subtle panel dividers use `--border`; interactive boundaries use the stronger control token.
+Semantic roles are aliases, not an independent palette: `background` → `--bg`, `foreground` → `--text`, `primary` → `--accent`, `primary-foreground` → `--on-accent`, `muted`/`secondary` → `--panel-hover`, `muted-foreground` → `--muted`, `input` → `--control-border`, and `destructive` → `--red`. In particular, do not overwrite the existing `--muted` or `--accent` with shadcn preset values. Both themes follow the existing root `data-theme` attribute, including portalled dialogs.
 
-Keep the incumbent Inter/system sans stack without adding font downloads. Body text is 14px; labels and supporting text are generally 12–13px; section headings 18px; page headings 29px (25px on phones). Phone inputs use 16px. Numeric comparisons use tabular figures; monospace is reserved for identifiers and code. Use the 4px spacing scale, 8px control radius, and 12px panel radius.
+Keep the Inter/system sans stack without font downloads. Body text is 14px, supporting text 12–13px, section headings 18px, and page headings 29px (25px on phones). Phone inputs use 16px. Numeric comparisons use tabular figures; identifiers and code use monospace. Use the 4px spacing scale, 8px control radius, and 12px panel radius.
 
-Reuse `.panel`, `.button`, `.primary`, `.badge`, `.toolbar`, `.actions`, `.grid`, and `.table-wrap`/`.table-scroll`. Buttons and inputs have a 44px minimum height. Use children and existing semantic markup for composition; do not add boolean-heavy component variants or a second component library.
+### Shared primitives
 
-## Interaction requirements
-
-- Main navigation uses links and exposes the current route. Mobile navigation exposes expanded state, closes on selection, and returns focus to its toggle on Escape.
-- Route changes reset scroll and move keyboard focus to main content. Browser titles identify the current page.
-- Dialogs retain native modal behavior, have accessible names, and restore focus to their opener. Cancelling access discards the token draft.
-- Tables that may scroll are named, focusable regions. Keep arrow-key scrolling and visible keyboard focus.
-- Distinguish initial loading, no observations, no matching filters, empty registries, stale data, and request errors. Never turn missing telemetry into zero.
-- Respect reduced motion; preserve immediate interaction feedback without decorative entrance animations.
-
-See [UI review and validation](docs/UI_REVIEW.md) for findings and verification limits.
+- Import `Button`, `Badge`, `Input`, `NativeSelect`, `Field`, `FieldGroup`, `FieldSet`, `Table`, `Tabs`, `Collapsible`, `Dialog`, `AlertDialog`, `ScrollArea`, `Separator`, `Skeleton`, `Alert` and `Empty` from their individual `components/ui` modules as needed.
+- `Button` defaults to the primary action. Use `variant="outline"` for routine actions, `variant="destructive"` for dangerous actions, and `asChild` for links. Do not combine these with the legacy `.button`, `.primary` or `.danger` recipes. Keep icons at the shared 16px size, with `data-icon="inline-start"` where applicable.
+- Controls and checkbox hit targets are at least 44 × 44px. Pending labels reserve width, expose `aria-busy`, and prevent duplicate submissions. All controls retain hover, focus and disabled feedback; reduced motion is respected.
+- Use `NativeSelect` for the current small option lists; it retains platform keyboard behavior. Visible `FieldLabel` labels may wrap controls. Validation uses `data-invalid` on `Field`, `aria-invalid` on the input, and an associated `FieldError`.
+- `Disclosure` composes shadcn Collapsible with a full-width, named button. It keeps content mounted with `forceMount` and hides it with `hidden`. Use it for device metric groups, diagnostics, tools and operation/session results.
+- `Confirmation` composes AlertDialog with a title and description. Focus starts on the first action, so place Cancel first. Escape delegates to the caller's cancellation policy; pending setup/TCP work cannot dismiss the confirmation. Closing restores the captured opener, including StrictMode. Screenshot preview uses Dialog with its own title and focus return.
+- Add components with `cd frontend && npx shadcn@latest add <component>`. Inspect the installed API and diff before updating. Keep `cn()` local to `lib/utils.ts`; retain token aliases and touch sizes. Install only components needed by a task.
 
 ## Device workspace
 
-The detail page reads in this order: identity and connection badge → telemetry freshness → key available observations → inspection and tools. Keep connection state separate from collection status. Display the successful collection timestamp once in the freshness area; last-seen belongs in identity diagnostics. Paused refresh describes the saved collection without claiming it is current. Failed status checks withhold current values while retaining history access.
+The page reads: compact identity/connection header and Manage device → one telemetry freshness area with Refresh status → Overview / History / Device tools tabs. Connection status and collection freshness are independent. A failed connection check withholds cached current values. The successful collection timestamp appears once; last-seen belongs in identity diagnostics. Paused refresh identifies the saved collection without calling it current.
 
-Use one telemetry panel with up to four available observations, then native disclosures for performance, memory/storage, battery/thermal, and cumulative network counters. Missing metrics belong in one availability disclosure and mean “not observed,” not necessarily “unsupported.” Keep real zeros. Show an explicit empty state when there is no usable collection.
+Overview shows up to four available key observations, then Performance, Memory & storage, Battery & thermal and Network disclosures. Identity/capabilities and missing sources remain secondary. Missing means “not observed,” not necessarily “unsupported,” and never becomes zero. Keep real zeros and cumulative network counters. Unsupported, stale, disconnected, loading, empty and failed requests remain distinguishable.
 
-Identity/capabilities and historical charts are secondary disclosures. Load history on first opening and retain its range afterward. Group interactive tools below monitoring with clear summaries and workspace anchor links. Keep tool children mounted when collapsed; live stream status stays in its summary, terminal resizing remains owned by its ResizeObserver, and existing route/auth cleanup stays owned by each tool. Closing a disclosure does not stop a session. Use the tools' explicit Stop/Close actions.
+History starts loading on first selection, retains its range across tab changes, and keeps existing charts, observation tables, recorded runs and exports. Preserve chart gaps and units. Tools contain Live screen, Terminal, Device controls, and Setup & connectivity. Existing optional setup is separate from ADB monitoring.
 
-On phones, key observations use two columns and metric groups become a single column. Long identities and labels wrap; toolbars wrap and table overflow stays inside the tool. Native summary controls retain visible focus and a 44px minimum target.
+Workspace and terminal TabsContent are force-mounted and explicitly hidden when inactive. Tool disclosures also remain mounted. Switching tabs or collapsing a tool neither starts nor terminates sessions. Live-screen state and the open terminal-tab count remain visible in the workspace tab and tool summaries. Stop stream and Close session are the explicit termination actions. Route/auth cleanup, WebSocket/decoder disposal, cancellation, limits and the terminal ResizeObserver remain owned by the tools. Browser-tab hiding retains the screen player's existing stop policy.
 
-### Device actions and alignment
+## Actions, rows and scrolling
 
-Use the explicit `.device-actions`, `.device-form-row`, and `.device-action-group` compositions for embedded tools; retain the existing generic `.actions` behavior on other pages. Routine device inspection and screen power have named groups. Restarts sit behind a divider, use the danger treatment, and retain confirmation. Application inspection/launch and force-stop/uninstall are separate groups within each package row. Session termination is separated from terminal editing/display tools.
+Keep local actions beside the content they control. Use `.device-actions`, `.device-form-row`, and `.device-action-group` for aligned task groups. Inspection, screen power, restart, application actions, terminal editing, and session termination stay separate. Restarts use a Separator and confirmation. Forms align their buttons to the control edge and stack on phones. Avoid adding new action bars to unrelated pages.
 
-Keep local actions beside their content: setup actions below instructions, connection settings in the connection heading, refresh beside application search, and record beside the program command. Desktop form buttons align to the input's bottom edge, not the label; inputs/selects and ordinary buttons are 44px high. On phones, form actions stack at full width while short action groups wrap naturally. Primary treatment marks the task's start/confirm action; secondary controls remain neutral. Changing pending labels reserve their width; expose busy state without shifting surrounding controls. Use 16px icons inside text buttons and the existing theme/state tokens.
+Observation and identity pairs remain definition lists. Scalar observations use stable number/unit columns; textual states align left, numbers align right, and composite durations remain complete. Applications and chart observations use shadcn Table with table semantics, stable columns and sticky headings. Applications stack into labelled blocks on phones. Operations and sessions remain lists, with aligned state/duration/action slots. Long names, capabilities and values wrap without hiding important content.
 
-### Device list rows and scrolling
+`ListRegion` composes ScrollArea with a naturally sized viewport capped at `min(28rem, 55svh)` (`min(24rem, 55svh)` on phones). Headings, counts and filters stay outside. The viewport is a named, focusable region with inset focus, visible scrollbars and an actual-overflow continuation hint. Polling never sets scroll position. A nested ListRegion defers scrolling to its outer region; Table does not add a second overflow wrapper. Wheel, touch and keyboard scrolling use the viewport. No virtualization is needed for the current lists.
 
-Use `ListRegion` for naturally sized lists with a maximum height tied to the viewport. The region has an accessible name, keyboard focus, visible scrollbar styling and a continuation hint only when content actually overflows. Headings, loaded counts and filters remain outside. Keep the region mounted across polling updates; never reset its scroll position. Expanded content inside a list uses the outer region for scrolling, including nested observation tables, to avoid competing scroll containers.
+## Shell and validation
 
-Observation and identity data remain definition lists. Scalar readings have separate number/unit columns and tabular numerals; composite durations retain their complete formatting. State text and identities align left. Applications and historical observation data retain table markup, fixed column proportions and sticky column headings. Application rows stack into labelled blocks on phones while preserving their safe/destructive action groups. Operation and session records are lists with stable state/duration/action slots; long names and identifiers wrap. Only disclosure summaries and actions get hover feedback. Missing durations explicitly say “Unavailable”; no missing telemetry becomes zero.
+Navigation exposes the current route; mobile navigation closes on selection and returns focus on Escape. Route changes reset scroll, focus main content and update the page title. Keep explicit access requirements and authenticated requests. State always includes text, not color alone.
+
+See [UI review and validation](docs/UI_REVIEW.md) for completed checks and hardware/browser limitations. Run frontend tests, lint, typecheck and build after migration work, and inspect both themes at phone, tablet and desktop sizes. Recheck representative legacy routes after shared CSS changes.
