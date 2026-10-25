@@ -83,6 +83,25 @@ jsou citlivé na časování a při zátěži občas selžou. S monitoringem nes
 5. Demo throttlingu: na telefonu `7z b` (Termux) → v detailu zařízení roste CPU a teplota,
    `CPU frequency limit` klesá pod `max`.
 
+### Telefon přes USB, když Wi-Fi izoluje klienty
+
+Na sítích s izolací klientů (domácí routery, hostovské sítě) se server k telefonu přes
+Wi-Fi nedostane. Telefon pak zůstane na kabelu k Windows a backend ve VM se k němu
+připojí přes tunel:
+
+1. Na Windows stáhnout [Android platform-tools](https://developer.android.com/tools/releases/platform-tools)
+   (stačí rozbalit do `%USERPROFILE%\tools\platform-tools`).
+2. Na telefonu zapnout *Možnosti vývojáře → Ladění USB*, připojit kabel a potvrdit
+   *Povolit ladění USB* (otisk klíče počítače).
+3. Spustit `.\scripts\usb-bridge.ps1` a nechat ho běžet. Přepne adbd do TCP režimu a
+   přesměruje `127.0.0.1:5555` na telefon; po restartu nebo přepojení telefonu to
+   zopakuje sám.
+4. V dashboardu zaregistrovat telefon jako `adb_tcp`, host `10.0.2.2`, port `5555`
+   (`10.0.2.2` je z VirtualBox NAT adresa Windows). Na telefonu ještě jednou potvrdit
+   klíč, tentokrát klíč backendu.
+
+Ověřeno 25. 10. 2026 na Samsung Galaxy A14 (Android 14, bez rootu).
+
 ## 6. Nasazení na školní VM (po schválení vyučujícím)
 
 Školní VM (Ubuntu 24.04, 2 vCPU, 1,4 GB RAM, **2,9 GB volného disku**, přístup přes školní VPN)
@@ -113,6 +132,11 @@ Naměřeno ve fake režimu: celý stack zabírá ~160 MB RAM, takže **RAM stač
 | Kapacita baterie | `android_battery_charge_ampere_hours` (aktuální náboj), `..._charge_full_...` a `..._charge_full_design_...` (opotřebení), `android_battery_cycle_count` |
 | Grafana | tabulka stavu celé flotily, teplota a capping v přehledu; v detailu info, GPU, throttling, ZRAM, procesy |
 | Telefony | `device-setup/`: Magisk boot skript, firewall, autorizace klíče |
+| React dashboard | nový vzhled „Lab bench“ (`DESIGN.md`), hromadné akce, Ctrl+K, notifikace alertů |
+| Grafy | teploty seskupené podle typu, strop frekvence s vyznačeným throttlingem, synchronizovaný kurzor, decimace bodů |
+| Program runs | stránka `/runs`: souhrn každého runu (CPU, RAM, teplota, throttling, baterie), porovnání dvou runů, export CSV |
+| Nastavení | stránka `/settings`: interval sběru, kontroly spojení a alertů za běhu; interval sběru i pro jednotlivé zařízení |
+| USB most | `scripts/usb-bridge.ps1` pro sítě s izolací klientů |
 | Malá VM | `docker-compose.school.yml`, `deploy/school/ship_images.sh` |
 
 Podrobnosti o metrikách jsou v [docs/METRICS.md](docs/METRICS.md).
