@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
@@ -7,16 +8,18 @@ const setToken = vi.fn();
 vi.mock("./lib/auth", () => ({
     useAuth: () => ({ token: "", identity: undefined, error: "", can: () => false, setToken }),
 }));
-vi.mock("./lib/alertNotifications", () => ({ useAlertNotifications: () => {} }));
+vi.mock("./lib/alertNotifications", () => ({ useAlertNotifications: () => 0 }));
 vi.mock("./features/fleet/FleetPage", () => ({ default: () => <h1>Fleet overview</h1> }));
 vi.mock("./features/alerts/AlertsPage", () => ({ default: () => <h1>Alerts</h1> }));
 
 function show() {
-    return render(<MemoryRouter><App /></MemoryRouter>);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(<QueryClientProvider client={client}><MemoryRouter><App /></MemoryRouter></QueryClientProvider>);
 }
 
 beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("[]", { status: 200 })));
     localStorage.clear();
     vi.spyOn(window, "scrollTo").mockImplementation(() => {});
     HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {

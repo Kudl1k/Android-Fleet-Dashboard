@@ -1,3 +1,4 @@
+import StatusChip from "../../components/StatusChip";
 import { useContext, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
@@ -180,21 +181,22 @@ export default function AlertsPage() {
                     is closed.
                 </p>
             </div>
-            <div className="panel">
+            <div className="panel alerts-summary">
                 <strong>
                     {active.data ? active.data.total : "Unavailable"} active
                     alerts
                 </strong>
-                <p>
+                <dl className="severity-counts">
                     {(["critical", "warning", "info"] as const).map((level) => (
-                        <span className="badge" key={level}>
-                            {level}:{" "}
-                            {active.data
-                                ? active.data[level]
-                                : "unavailable"}{" "}
-                        </span>
+                        <div key={level} data-tone={level === "warning" ? "warn" : level}>
+                            <dt>
+                                <i aria-hidden="true" />
+                                {level[0].toUpperCase() + level.slice(1)}
+                            </dt>
+                            <dd>{active.data ? active.data[level] : "Unavailable"}</dd>
+                        </div>
                     ))}
-                </p>
+                </dl>
                 <p className="muted">
                     Active includes pending, firing, and acknowledged alerts.
                 </p>
@@ -297,7 +299,7 @@ export default function AlertsPage() {
                                         </Link>
                                         <div>{labels[event.condition]}</div>
                                     </td>
-                                    <td>{event.severity}</td>
+                                    <td><StatusChip value={event.severity} /></td>
                                     <td>
                                         {event.threshold}{" "}
                                         {unit(event.condition)}
@@ -307,7 +309,7 @@ export default function AlertsPage() {
                                         </div>
                                     </td>
                                     <td>
-                                        {event.state}
+                                        <StatusChip value={event.state} />
                                         <div className="muted">
                                             {new Date(
                                                 event.fired_at ??
@@ -338,7 +340,7 @@ export default function AlertsPage() {
                     </table>
                 </div>
                 {events.data && (
-                    <div>
+                    <div className="pager">
                         <button
                             className="button"
                             disabled={offset === 0}
