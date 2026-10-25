@@ -59,6 +59,8 @@ class FleetService:
         self._force_probe: set[str] = set()
         self._capability_refresh = capability_refresh_seconds
         self._closing = False
+        # Optional per-device cadence (seconds); None or missing keeps the fleet interval.
+        self.metrics_interval_for: Callable[[str], float] | None = None
         self.discovery = DiscoveryService(adb, enable_mdns=enable_mdns)
         self.connections = ConnectionManager(
             adb,
@@ -211,13 +213,15 @@ class FleetService:
                 self._metric_tasks.pop(device.id, None)
         return None
 
-    async def collect_metrics(self) -> None:
+    async def collect_metrics(self, only: set[str] | None = None) -> None:
         async with self._lock:
             if self._closing:
                 return
             tasks: list[asyncio.Task[bool | None]] = []
             for device in self.devices.values():
                 if device.state != DeviceState.ONLINE:
+                    continue
+                if only is not None and device.id not in only:
                     continue
                 task = self._metric_tasks.get(device.id)
                 if task is None or task.done():
@@ -264,19 +268,48 @@ class FleetService:
             return None
         return self.snapshots.get(device_id)
 
-    async def run_metrics(self, interval: float) -> None:
+    async def run_metrics(self, interval: float | Callable[[], float]) -> None:
+        """Sample each online device on its own cadence.
+
+        The fleet interval may be a callable so operators can change it at runtime;
+        `metrics_interval_for` lets a single device run faster or slower.
+        """
         loop = asyncio.get_running_loop()
-        deadline = loop.time() + interval
+
+        def fleet_interval() -> float:
+            return interval() if callable(interval) else interval
+
+        def device_interval(device_id: str) -> float:
+            if self.metrics_interval_for is None:
+                return fleet_interval()
+            return self.metrics_interval_for(device_id)
+
+        due: dict[str, float] = {}
+        next_prune = loop.time() + fleet_interval()
         while True:
-            await asyncio.sleep(max(0, deadline - loop.time()))
-            await self.collect_metrics()
-            try:
-                await self.history.prune()
-            except HistoryError:
-                self._history_prune_healthy = False
-            else:
-                self._history_prune_healthy = True
-            deadline = max(deadline + interval, loop.time())
+            now = loop.time()
+            online = [d.id for d in self.devices.values() if d.state == DeviceState.ONLINE]
+            for device_id in online:
+                due.setdefault(device_id, now + device_interval(device_id))
+            for device_id in set(due) - set(online):
+                del due[device_id]
+            ready = {device_id for device_id in online if due[device_id] <= now}
+            if ready:
+                await self.collect_metrics(ready)
+                for device_id in ready:
+                    due[device_id] = max(due[device_id] + device_interval(device_id), loop.time())
+            if loop.time() >= next_prune:
+                try:
+                    await self.history.prune()
+                except HistoryError:
+                    self._history_prune_healthy = False
+                else:
+                    self._history_prune_healthy = True
+                next_prune = loop.time() + fleet_interval()
+            # Wake for the next due device, but re-read cadence at least once per second
+            # so a shortened interval or a newly online device is picked up promptly.
+            wake = min((*due.values(), next_prune), default=next_prune)
+            await asyncio.sleep(min(max(0.05, wake - loop.time()), 1.0))
 
     async def stop_metrics(self) -> None:
         self._closing = True
@@ -321,9 +354,10 @@ class FleetService:
         if collect:
             await self.collect_metrics()
 
-    async def run(self, interval: float) -> None:
+    async def run(self, interval: float | Callable[[], float]) -> None:
         while True:
-            await asyncio.sleep(interval)  # noqa: ASYNC110 - scheduled polling
+            # Scheduled polling; a callable interval is re-read on every cycle.
+            await asyncio.sleep(interval() if callable(interval) else interval)  # noqa: ASYNC110
             await self.poll(collect=False)
 
     def observation_generation(self, device_id: str) -> int:
