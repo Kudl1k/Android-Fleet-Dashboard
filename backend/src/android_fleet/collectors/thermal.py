@@ -101,12 +101,27 @@ def parse_thermal_sysfs(output: str) -> tuple[MetricValue, ...]:
             temperature = float(raw_temperature) / 1000
         except ValueError:
             continue
+        # Disabled or virtual zones commonly report exactly 0; that is not an observation.
+        if temperature == 0:
+            continue
         value = MetricValue(
             "thermal_temperature", temperature, "celsius", (("sensor", sensor), ("type", kind))
         )
         if valid_metric(value):
             values[(sensor, kind)] = value
     return tuple(values.values())
+
+
+def _without_hal_duplicates(
+    zones: tuple[MetricValue, ...], hal: tuple[MetricValue, ...]
+) -> tuple[MetricValue, ...]:
+    """Drop sysfs zones the HAL already reports, so one sensor is never charted twice."""
+    reported = {dict(value.labels).get("sensor", "").lower() for value in hal}
+    return tuple(
+        zone
+        for zone in zones
+        if dict(zone.labels)["sensor"].partition(":")[2].lower() not in reported
+    )
 
 
 class ThermalCollector:
@@ -124,7 +139,7 @@ class ThermalCollector:
             # read_script elevates only where root capability was observed.
             output = await read_script(adb, device, THERMAL_SCRIPT, self._timeout)
             if output is not None:
-                values += parse_thermal_sysfs(output)
+                values += _without_hal_duplicates(parse_thermal_sysfs(output), values)
         if values:
             device.capabilities.add(DeviceCapability.THERMAL_BASIC)
         return snapshot(device, values)

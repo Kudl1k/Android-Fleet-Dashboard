@@ -41,6 +41,20 @@ def parse_storage(output: str) -> tuple[MetricValue, ...]:
     return ()
 
 
+def parse_diskstats(output: str) -> tuple[MetricValue, ...]:
+    """`dumpsys diskstats` summary, readable without root when df on /data is denied."""
+    match = re.search(r"^Data-Free:\s*(\d+)K\s*/\s*(\d+)K total", output, re.MULTILINE)
+    if match is None:
+        return ()
+    free, total = int(match[1]), int(match[2])
+    if not 0 < total <= (2**63 - 1) // 1024 or not 0 <= free <= total:
+        return ()
+    return tuple(
+        MetricValue(f"storage_{name}", float(value * 1024), "bytes", (("mount", "/data"),))
+        for name, value in (("total", total), ("used", total - free), ("free", free))
+    )
+
+
 class StorageCollector:
     def __init__(self, *, timeout: float = 5.0) -> None:
         self._timeout = validate_timeout(timeout)
@@ -50,6 +64,9 @@ class StorageCollector:
             return snapshot(device)
         output = await read_shell(adb, device.serial, ("df", "-k", "/data"), self._timeout)
         values = parse_storage(output) if output is not None else ()
+        if not values:
+            output = await read_shell(adb, device.serial, ("dumpsys", "diskstats"), self._timeout)
+            values = parse_diskstats(output) if output is not None else ()
         if values:
             device.capabilities.add(DeviceCapability.STORAGE_METRICS)
         return snapshot(device, values)
