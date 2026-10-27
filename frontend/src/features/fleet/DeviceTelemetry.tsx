@@ -108,13 +108,30 @@ function displayMetric(metric: Metric) {
     return formatMetric(metric.value, metric.unit);
 }
 
+/** Separates interfaces whose counters are all zero (idle modem/VoWiFi links) from active ones. */
+export function splitIdleInterfaces(values: Metric[]) {
+    const busy = new Set(
+        values
+            .filter((value) => value.value > 0)
+            .map((value) => value.labels.interface),
+    );
+    return {
+        active: values.filter((value) => busy.has(value.labels.interface)),
+        idle: values.filter((value) => !busy.has(value.labels.interface)),
+    };
+}
+
+function loadTone(concern: number, warn = 0.75, critical = 0.9) {
+    return concern >= critical ? "critical" : concern >= warn ? "warn" : "ok";
+}
+
 export default function DeviceTelemetry({
     current,
 }: {
     current: CurrentMetrics | undefined;
 }) {
     const values = current?.values ?? [];
-    const highlights: { label: string; value: string; detail?: string }[] = [];
+    const highlights: { label: string; value: string; detail?: string; ratio?: number; tone?: string }[] = [];
     for (const [name, label] of [
         ["cpu_usage", "CPU utilization"],
         ["memory", "RAM utilization"],
@@ -131,6 +148,8 @@ export default function DeviceTelemetry({
                     label,
                     value: formatMetric(used / total, "ratio"),
                     detail: `${formatMetric(used, "bytes")} of ${formatMetric(total, "bytes")}`,
+                    ratio: used / total,
+                    tone: loadTone(used / total),
                 });
             } else {
                 const metric = values.find(
@@ -145,7 +164,16 @@ export default function DeviceTelemetry({
         } else {
             const metric = values.find((value) => value.name === name);
             if (metric)
-                highlights.push({ label, value: displayMetric(metric) });
+                highlights.push({
+                    label,
+                    value: displayMetric(metric),
+                    ...(metric.unit === "ratio" && {
+                        ratio: metric.value,
+                        tone: name === "battery_level"
+                            ? loadTone(1 - metric.value, 0.7, 0.85)
+                            : loadTone(metric.value),
+                    }),
+                });
         }
     }
     // A sparse but usable collection still gets a visible observation, even when
@@ -181,10 +209,18 @@ export default function DeviceTelemetry({
             {highlights.length > 0 && (
                 <dl className="device-highlights" aria-label="Key observations">
                     {highlights.slice(0, 4).map((item) => (
-                        <div key={item.label}>
+                        <div key={item.label} data-tone={item.tone}>
                             <dt>{item.label}</dt>
                             <dd>
                                 {item.value}
+                                {item.ratio !== undefined && (
+                                    <span className="meter-track" aria-hidden="true">
+                                        <span
+                                            className="meter-fill"
+                                            style={{ width: `${Math.min(1, Math.max(0, item.ratio)) * 100}%` }}
+                                        />
+                                    </span>
+                                )}
                                 {item.detail && <small>{item.detail}</small>}
                             </dd>
                         </div>
@@ -195,9 +231,14 @@ export default function DeviceTelemetry({
                 <>
                     <div className="device-metric-groups">
                         {groups.map(({ title, icon: Icon, names }) => {
-                            const observations = names.flatMap((name) =>
+                            const all = names.flatMap((name) =>
                                 values.filter((value) => value.name === name),
                             );
+                            const { active, idle } =
+                                title === "Network"
+                                    ? splitIdleInterfaces(all)
+                                    : { active: all, idle: [] };
+                            const observations = active;
                             return (
                                 <Disclosure
                                     key={title}
@@ -212,12 +253,22 @@ export default function DeviceTelemetry({
                                             reset, not transfer rates.
                                         </p>
                                     )}
+                                    {idle.length > 0 && (
+                                        <Disclosure
+                                            title={`Interfaces without traffic (${new Set(idle.map((value) => value.labels.interface)).size})`}
+                                        >
+                                            <MetricList
+                                                values={idle}
+                                                label="Interfaces without traffic"
+                                            />
+                                        </Disclosure>
+                                    )}
                                     {observations.length ? (
                                         <MetricList
                                             values={observations}
                                             label={`${title} observations`}
                                         />
-                                    ) : (
+                                    ) : idle.length ? null : (
                                         <p className="muted">
                                             No observations in this collection.
                                             See metric availability below.

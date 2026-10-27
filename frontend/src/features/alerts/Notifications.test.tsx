@@ -29,7 +29,7 @@ it("suppresses initial events, announces new events once, and survives backend f
     const next = { ...alert, id: "a2" };
     vi.mocked(request).mockResolvedValue({ items: [next, alert], total: 2 });
     await act(async () => { await client.refetchQueries({ queryKey: ["alert-notifications"] }); });
-    await waitFor(() => expect(toast).toHaveBeenCalledWith("CRITICAL: Samsung: cpu high", "info"));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith("Samsung: cpu high", "error", { title: "Critical alert", href: "/devices/d1" }));
     await act(async () => { await client.refetchQueries({ queryKey: ["alert-notifications"] }); });
     expect(toast).toHaveBeenCalledTimes(1);
 });

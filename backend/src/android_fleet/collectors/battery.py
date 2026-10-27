@@ -67,6 +67,14 @@ def parse_battery_capacity(output: str) -> tuple[MetricValue, ...]:
             values.append(MetricValue(_CAPACITY_NAMES[key], number / 1_000_000, "ampere_hours"))
         elif key == "cycle_count" and number >= 0:
             values.append(MetricValue("battery_cycle_count", float(number), "count"))
+    capacities = {value.name: value.value for value in values}
+    full = capacities.get("battery_charge_full")
+    design = capacities.get("battery_charge_full_design")
+    # Some vendor drivers (seen on a Samsung Galaxy A14) expose the design value in a
+    # different unit. A design capacity under half the measured one is contradictory,
+    # so withhold it rather than guess a conversion.
+    if full is not None and design is not None and design < full / 2:
+        values = [value for value in values if value.name != "battery_charge_full_design"]
     return tuple(value for value in values if valid_metric(value))
 
 

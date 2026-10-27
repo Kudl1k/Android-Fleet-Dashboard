@@ -21,7 +21,8 @@ import DeviceSetup from "../control/DeviceSetup";
 import DeviceControl from "../control/DeviceControl";
 import LiveScreen from "../screen/LiveScreen";
 import TerminalPanel from "../terminal/TerminalPanel";
-import { useContext, useState, type ReactNode } from "react";
+import { useContext, useMemo, useState, type ReactNode } from "react";
+import { frequencyCeiling } from "../telemetry/series";
 import {
     ArrowLeft,
     Settings,
@@ -33,6 +34,8 @@ import {
     ChartNoAxesCombined,
 } from "lucide-react";
 import DeviceTelemetry from "./DeviceTelemetry";
+import DeviceInterval from "./DeviceInterval";
+import { grafanaDeviceUrl } from "../../lib/grafana";
 import { Link, useParams } from "react-router-dom";
 import MetricChart, { deviceCharts } from "../telemetry/MetricChart";
 import DeviceRunCharts from "../terminal/DeviceRunCharts";
@@ -42,8 +45,9 @@ import {
     useMetrics,
     useHistory,
 } from "../../lib/hooks";
-import { type HistoryPoint } from "../../lib/api";
-import { fleetGroup } from "./FleetPage";
+import { metricValue, type HistoryPoint } from "../../lib/api";
+import PhoneGlyph from "../../components/PhoneGlyph";
+import { fleetGroup } from "./fleetState";
 export function chartPoints(points: HistoryPoint[]) {
     const result: { time: number; value: number | null }[] = [];
     let previous: number | null = null;
@@ -88,6 +92,27 @@ function HistoryChart({
                 </p>
             )}
         </>
+    );
+}
+
+function CeilingChart({ id, minutes }: { id: string; minutes: number }) {
+    const limits = useHistory(id, minutes, "cpu_frequency_limit");
+    const maxima = useHistory(id, minutes, "cpu_max_frequency");
+    const points = useMemo(
+        () => frequencyCeiling(limits.data?.points ?? [], maxima.data?.points ?? []),
+        [limits.data, maxima.data],
+    );
+    const failed = limits.error ?? maxima.error;
+    return (
+        <MetricChart
+            title="CPU frequency ceiling"
+            unit="ratio"
+            description="Lowest per-core frequency limit as a share of the hardware maximum. 100 % means no throttling; shaded periods were capped."
+            points={points}
+            loading={limits.isPending || maxima.isPending}
+            error={failed ? failed.message : undefined}
+            highlightBelow={99.5}
+        />
     );
 }
 
@@ -194,7 +219,13 @@ function DeviceWorkspace({ id }: { id: string }) {
                 Fleet overview
             </Link>
             <header className="page-heading device-heading">
-                <div>
+                <PhoneGlyph
+                    group={device.isError ? "degraded" : fleetGroup(d)}
+                    battery={metricValue(current, "battery_level")}
+                    charging={metricValue(current, "battery_charging") === 1}
+                    size="lg"
+                />
+                <div className="device-heading-text">
                     <div className="device-title">
                         <h1>{d.name}</h1>
                         <Badge
@@ -227,12 +258,21 @@ function DeviceWorkspace({ id }: { id: string }) {
                         </code>
                     </p>
                 </div>
-                <Button asChild>
-                    <Link to={`/management?device=${encodeURIComponent(id)}`}>
-                        <Settings data-icon="inline-start" aria-hidden="true" />
-                        Manage device
-                    </Link>
-                </Button>
+                <div className="device-heading-actions">
+                    <Button asChild variant="outline">
+                        <a href={grafanaDeviceUrl(id)} target="_blank" rel="noreferrer">
+                            <ChartNoAxesCombined data-icon="inline-start" aria-hidden="true" />
+                            Open in Grafana
+                            <span className="sr-only"> (opens in a new tab)</span>
+                        </a>
+                    </Button>
+                    <Button asChild>
+                        <Link to={`/management?device=${encodeURIComponent(id)}`}>
+                            <Settings data-icon="inline-start" aria-hidden="true" />
+                            Manage device
+                        </Link>
+                    </Button>
+                </div>
             </header>
             <section
                 className="panel device-freshness"
@@ -242,7 +282,7 @@ function DeviceWorkspace({ id }: { id: string }) {
                     <div className="device-collection-state" role="status">
                         <span
                             aria-hidden="true"
-                            className={`status-dot ${current?.values.length && polling ? "online" : "degraded"}`}
+                            className={`led ${current?.values.length && polling ? "online" : "degraded"}`}
                         />
                         <strong>{freshness}</strong>
                     </div>
@@ -260,6 +300,7 @@ function DeviceWorkspace({ id }: { id: string }) {
                         </p>
                     )}
                 </div>
+                <DeviceInterval deviceId={id} />
                 <Button
                     variant="outline"
                     className="device-refresh"
@@ -581,6 +622,7 @@ function DeviceHistory({ id }: { id: string }) {
                         unit={unit}
                     />
                 ))}
+                <CeilingChart id={id} minutes={minutes} />
             </div>
         </>
     );

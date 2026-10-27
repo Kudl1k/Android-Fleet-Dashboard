@@ -183,13 +183,43 @@ testem:
 Zajímavost: telefon trvale na nabíječce hlásí stav baterie „overheat“ (health 3) při
 31 °C. Collector hodnotu čte správně, je to údaj telefonu.
 
-Nebylo ověřeno: skutečné spojení přes ADB TCP a pravidelný sběr, obnova spojení po
-restartu telefonu, Magisk skript a firewall, Mali GPU (Pixel 9 Pro), Nexus 5X
-(Android 8) a sysfs soubory kapacity baterie.
+Nebylo ověřeno: obnova spojení po restartu telefonu, Magisk skript a firewall, Mali GPU
+(Pixel 9 Pro), Nexus 5X (Android 8).
+
+### Test přes ADB s nerootnutým telefonem (25. 10. 2026)
+
+Samsung Galaxy A14 (SM-A145R, MediaTek MT6769, Android 14, One UI 6.1, **bez rootu**),
+připojený přes USB a `scripts/usb-bridge.ps1`, protože domácí Wi-Fi izoluje klienty.
+Poprvé se tak ověřilo skutečné spojení přes ADB TCP, autorizace klíče serveru a
+pravidelný sběr.
+
+| Oblast | Bez rootu (A14) | S rootem (Pixel 3a XL, přehrané výstupy) |
+|---|---|---|
+| CPU celkem, po jádrech, frekvence | ✅ | ✅ |
+| RAM, swap, ZRAM | ✅ | ✅ |
+| Úložiště | ✅ přes záložní `dumpsys diskstats` (`df /data` vrací jen mount `/storage/emulated/0/Android/obb`) | ✅ `df -k /data` |
+| Síť | ✅ (40+ nečinných rozhraní modemu, v UI schovaná) | ✅ |
+| Teploty | ✅ HAL i část sysfs zón | ✅ všechny zóny |
+| Baterie: úroveň, napětí, proud, náboj, cykly | ✅ | ✅ |
+| Původní kapacita baterie | ❌ ovladač hlásí nesmyslnou hodnotu, zahazuje se | ✅ |
+| GPU, procesy, strop frekvence | ❌ nečitelné bez rootu | ✅ |
+
+Test (a snímek grafu teplot z jiného telefonu) ukázal tři chyby, opravené a pokryté testy:
+
+1. Úložiště chybělo (collector z `df -k /data` nedostal použitelný řádek, A14 hlásí
+   mount `/storage/emulated/0/Android/obb`). Přidána záložní cesta přes
+   `dumpsys diskstats`, kterou smí číst i shell uživatel; na A14 ověřeno (52,6 GB
+   celkem, 47,7 GB volných, shodně s výpisem telefonu).
+2. Ovladač Samsungu hlásí `charge_full_design` v jiné jednotce (0,29 Ah vs. skutečných
+   2,95 Ah, které potvrzuje i charge counter). Původní kapacita, která je menší než
+   polovina naměřené, se teď neukazuje místo vymýšlení převodu.
+3. Teploty byly v grafu dvakrát: jednou z HAL (`cpu1-gold-usr`) a podruhé ze sysfs
+   (`thermal_zone11:cpu1-gold-usr`); vypnuté zóny hlásily 0 °C. Duplicity a nuly se
+   vyřazují, graf ukazuje nejteplejší senzor každého typu.
 
 ## Co zbývá
 
-1. **Plný test přes ADB** na rootnutém telefonu: příprava přes `device-setup/`,
+1. **Plný test přes ADB** na rootnutém telefonu (nerootnutý A14 už ověřen): příprava přes `device-setup/`,
    registrace, sběr, restart telefonu a výpadek Wi-Fi, ukázka throttlingu (`7z b`
    v Termuxu). Mění nastavení telefonu, proto až po schválení.
 2. **Ostatní telefony** (Pixel 9 Pro, Nexus 5X, druhý Pixel 3a).

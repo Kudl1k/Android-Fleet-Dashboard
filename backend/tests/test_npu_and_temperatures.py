@@ -78,3 +78,35 @@ async def test_thermal_includes_sysfs_even_when_hal_is_available() -> None:
         f"Temperature{{mValue=40, mType=0, mName=cpu{i}}}" for i in range(160)
     )
     assert len(parse_thermal(output)) == 128
+
+
+async def test_thermal_skips_sysfs_zones_already_reported_by_hal() -> None:
+    class Adb(FakeAdbClient):
+        async def shell(
+            self, serial: str, argv: tuple[str, ...], *, timeout: float = 10
+        ) -> CommandResult:
+            if argv == ("dumpsys", "thermalservice"):
+                return CommandResult(
+                    stdout=(
+                        "Current temperatures from HAL:\n"
+                        " Temperature{mValue=40, mType=0, mName=cpu1-gold-usr}"
+                    )
+                )
+            if argv[-1] == THERMAL_SCRIPT:
+                return CommandResult(
+                    stdout=(
+                        "thermal_zone11|cpu1-gold-usr|40500\n"
+                        "thermal_zone12|cpu2-silver-usr|38000\n"
+                        "thermal_zone13|disabled-sensor|0"
+                    )
+                )
+            return CommandResult(exit_code=1)
+
+    device = Device(
+        "phone", "serial", "Phone", DeviceState.ONLINE, capabilities={DeviceCapability.ADB_SHELL}
+    )
+    values = (await ThermalCollector().collect(device, Adb())).values
+    assert sorted(dict(value.labels)["sensor"] for value in values) == [
+        "cpu1-gold-usr",
+        "thermal_zone12:cpu2-silver-usr",
+    ]

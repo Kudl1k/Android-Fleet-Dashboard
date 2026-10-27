@@ -62,6 +62,29 @@ export function useHistory(id: string, minutes: number, metric: string) {
             } while (cursor && pages < 20);
             return { points, truncated: cursor !== null };
         },
-        refetchInterval: polling || false,
+        // History changes slowly; redrawing every chart on each fast poll caused lag.
+        refetchInterval: polling ? Math.max(polling, 60000) : false,
+    });
+}
+/** Recent history of one ratio metric for card sparklines; refreshed at most once a minute. */
+export function useTrend(id: string, metric: string, enabled: boolean, minutes = 30) {
+    return useQuery({
+        queryKey: ["trend", id, metric, minutes],
+        queryFn: async ({ signal }) => {
+            const end = new Date();
+            const params = new URLSearchParams({
+                start: new Date(end.getTime() - minutes * 60000).toISOString(),
+                end: end.toISOString(),
+                metric,
+                limit: "500",
+            });
+            const page = await request<History>(
+                `/api/v1/devices/${encodeURIComponent(id)}/metrics/history?${params}`,
+                { signal },
+            );
+            return page.points.map((point) => point.value);
+        },
+        enabled,
+        refetchInterval: 60000,
     });
 }

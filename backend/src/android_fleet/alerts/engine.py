@@ -2,6 +2,7 @@
 
 import asyncio
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -227,7 +228,7 @@ class AlertEngine:
                     event.updated_at = timestamp
                     await self.store.save_event(event)
 
-    async def run(self, interval: float) -> None:
+    async def run(self, interval: float | Callable[[], float]) -> None:
         while True:
             started = time.monotonic()
             try:
@@ -243,7 +244,7 @@ class AlertEngine:
             self.evaluations_total += 1
             self.last_evaluation_duration = time.monotonic() - started
             self.last_evaluation_at = datetime.now(UTC)
-            await asyncio.sleep(interval)
+            await asyncio.sleep(interval() if callable(interval) else interval)
 
     async def save_rule(self, body: RuleInput, rule_id: str | None = None) -> Rule:
         async with self._lock:

@@ -4,7 +4,9 @@ The dashboard is an operational workspace for finding Android devices, assessing
 
 ## Direction
 
-Keep the slate-and-blue identity. Device identity, connection state, observation freshness and the next useful action outrank decoration. Use panels for distinct tasks, not individual readings. The fleet keeps its consolidated status strip.
+"Lab bench": the fleet reads like phones laid out on a workbench. Graphite neutrals, one blue signal accent for actions and selection, and LED-style state colours (green online/OK, amber needs attention, red critical, grey offline). Device identity, connection state, observation freshness and the next useful action outrank decoration. Use panels for distinct tasks, not individual readings. The fleet keeps its consolidated status strip, now a set of filter buttons over a proportional health bar.
+
+Signature elements: `PhoneGlyph` (a phone outline whose screen fills with the observed battery level; unplugged icon when not online), `Meter` (labelled gauge; a missing value is an empty track, never zero) and `StatusChip` (LED plus text for operation, alert, audit and profile states). State is always text plus colour, never colour alone. Fleet cards show a 30-minute CPU sparkline (history fetched at most once a minute) and a firing-alert line; critical alerts also tint the card border. "Select devices" turns on selection of online devices and a sticky bulk bar (wake, lock, screenshot, reboot) that queues one audited operation per device; reboot always goes through Confirmation. Ctrl/Cmd+K opens a jump-only command palette for devices and pages. New firing alerts appear as bottom-right toasts with severity, device and an Open link; critical ones stay for 15 s. Navigation is grouped into Monitor / Control / Administer, shows the firing-alert count, and the sidebar footer shows one LED per registered device.
 
 Desktop layout: navigation rail → workspace controls → page heading and action → monitoring or task content. Below 760px, navigation becomes a disclosure, forms stack, actions wrap, and key observations use two columns. Long identities remain readable. Horizontal overflow belongs to a named data region, never the whole page.
 
@@ -14,12 +16,16 @@ Desktop layout: navigation rail → workspace controls → page heading and acti
 
 | Role | Dark | Light |
 | --- | --- | --- |
-| Background (`--bg`) | #0c111b | #f3f6fa |
-| Panel (`--panel`) | #141d2b | #ffffff |
-| Text (`--text`) | #edf3fb | #16243a |
-| Secondary text (`--muted`) | #9aaac0 | #52647b |
-| Accent (`--accent`) | #6daaff | #175dc2 |
-| Control boundary (`--control-border`) | #56667e | #7c8ca3 |
+| Background (`--bg`) | #0f1216 | #eef1f4 |
+| Sidebar (`--sidebar`) | #0b0d10 | #e4e8ed |
+| Panel (`--panel`) | #161a20 | #ffffff |
+| Raised panel (`--panel-raised`) | #1c2129 | #f7f9fb |
+| Inset well (`--inset`) | #0c0f13 | #e9edf1 |
+| Text (`--text`) | #e8ecf1 | #141920 |
+| Secondary text (`--muted`) | #9aa4b1 | #55606e |
+| Accent (`--accent`) | #72a9ff | #1d5ccc |
+| Control boundary (`--control-border`) | #647080 | #7d8899 |
+| OK / attention / critical / off | #4fd889 / #f2b544 / #ff7a7a / #6c7683 | #0d7a43 / #8f5b00 / #bf2c2c / #6b7480 |
 
 Semantic roles are aliases, not an independent palette: `background` → `--bg`, `foreground` → `--text`, `primary` → `--accent`, `primary-foreground` → `--on-accent`, `muted`/`secondary` → `--panel-hover`, `muted-foreground` → `--muted`, `input` → `--control-border`, and `destructive` → `--red`. In particular, do not overwrite the existing `--muted` or `--accent` with shadcn preset values. Both themes follow the existing root `data-theme` attribute, including portalled dialogs.
 
@@ -44,6 +50,16 @@ Overview shows up to four available key observations, then Performance, Memory &
 History starts loading on first selection, retains its range across tab changes, and keeps existing charts, observation tables, recorded runs and exports. Preserve chart gaps and units. Tools contain Live screen, Terminal, Device controls, and Setup & connectivity. Existing optional setup is separate from ADB monitoring.
 
 Workspace and terminal TabsContent are force-mounted and explicitly hidden when inactive. Tool disclosures also remain mounted. Switching tabs or collapsing a tool neither starts nor terminates sessions. Live-screen state and the open terminal-tab count remain visible in the workspace tab and tool summaries. Stop stream and Close session are the explicit termination actions. Route/auth cleanup, WebSocket/decoder disposal, cancellation, limits and the terminal ResizeObserver remain owned by the tools. Browser-tab hiding retains the screen player's existing stop policy.
+
+## Charts
+
+`MetricChart` is the only chart recipe. Lines never animate, charts draw only when scrolled near the viewport, and series are averaged down to about 300 points while offline gaps still break the line. All device-history charts share one hover cursor (`syncId`). The tooltip lists series by value, and legend entries toggle their series. Temperatures default to the hottest sensor per type (CPU, GPU, battery, skin…); "Individual sensors" shows every zone. "CPU frequency ceiling" plots the lowest per-core limit as a share of the hardware maximum and shades capped periods in amber. Device history refreshes at most once a minute regardless of the fleet polling rate.
+
+## Program runs and settings
+
+`/runs` lists terminal program runs, newest first, with summaries computed from recorded statistics: CPU average and peak, RAM peak, hottest sensor, whether the CPU was throttled, and battery used. Unobserved values show "—", never zero. Any two recorded runs can be compared; their charts are aligned to elapsed time since start. The summary exports to CSV.
+
+`/settings` edits only runtime cadences (collection, connection checks, alert evaluation), each with its range, environment default and reset. The device freshness panel has a "Collect every" select for a per-device override. Viewers see values read-only. Secrets and ports never appear.
 
 ## Actions, rows and scrolling
 

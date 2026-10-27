@@ -50,11 +50,11 @@ describe("history API hook", () => {
     });
 });
 
-it("refreshes device history every 15 seconds by default", () => {
+it("refreshes device history at most once a minute", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
     const mounted = renderHook(() => useHistory("phone", 60, "cpu_core_usage"), { wrapper });
-    expect(client.getQueryCache().find({ queryKey: ["history", "phone", 60, "cpu_core_usage"] })?.options).toMatchObject({ refetchInterval: 15000 });
+    expect(client.getQueryCache().find({ queryKey: ["history", "phone", 60, "cpu_core_usage"] })?.options).toMatchObject({ refetchInterval: 60000 });
     mounted.unmount();
     client.clear();
 });

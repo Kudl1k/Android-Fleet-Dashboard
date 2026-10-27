@@ -21,6 +21,11 @@ REST uses `/api/v1`, UTC timestamps, stable UUID device IDs and lower_snake_case
 | GET | `/api/v1/devices/{device_id}/capabilities` | Observed capabilities |
 | POST | `/api/v1/devices/{device_id}/capabilities/refresh` | Reprobe online device; 200, offline 409 |
 | GET | `/api/v1/discovery/devices` | Discovery envelope: `devices`, `mdns_enabled`, `mdns_available` |
+| GET | `/api/v1/settings` | Runtime cadences with defaults, limits and per-device overrides (`device.read`) |
+| PUT | `/api/v1/settings` | `{"values": {"metrics_interval_seconds": 10}}`; `null` restores the environment default (`device.manage`, audited) |
+| PUT | `/api/v1/settings/devices/{device_id}` | Per-device `metrics_interval_seconds` override; `null` removes it (`device.manage`, audited) |
+
+Runtime settings cover only cadences that can change without a restart: `metrics_interval_seconds` (5–3600, per-device capable), `poll_interval_seconds` (5–3600) and `alerts_interval_seconds` (2–600). They persist in `settings.sqlite3` beside the registry and take effect within a second. Secrets, ports, paths and limits remain environment-only and are not exposed through this API.
 
 Readiness reflects storage, metrics-worker, alert-worker and ADB discovery/polling availability, independent of fleet size. An accessible server with zero devices can be ready; offline devices alone do not make the manager unready. HTTP 202 accepts connection intent rather than guaranteeing an online device.
 

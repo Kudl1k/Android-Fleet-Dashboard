@@ -32,8 +32,10 @@ from android_fleet.api.metric_models import (
 )
 from android_fleet.api.models import DevicePatch, DeviceRequest, DeviceResponse
 from android_fleet.api.security import ControlDenied
+from android_fleet.api.settings import settings_router
 from android_fleet.control.api import router as control_router
 from android_fleet.control.manager import PERMISSIONS, Manager
+from android_fleet.core.runtime_settings import RuntimeSettings
 from android_fleet.core.settings import Settings
 from android_fleet.devices.models import Device, DeviceState
 from android_fleet.devices.registry import (
@@ -144,6 +146,17 @@ def create_app(
     pairing = PairingService(
         client, service, security, configuration, state_directory / "pairing.sqlite3"
     )
+    runtime = RuntimeSettings(
+        {
+            "metrics_interval_seconds": configuration.metrics_interval_seconds,
+            "poll_interval_seconds": configuration.poll_interval_seconds,
+            "alerts_interval_seconds": configuration.alerts_interval_seconds,
+        },
+        state_directory / "settings.sqlite3",
+    )
+    service.metrics_interval_for = lambda device_id: runtime.device_value(
+        device_id, "metrics_interval_seconds"
+    )
     operations = Manager(
         client,
         service,
@@ -180,6 +193,7 @@ def create_app(
 
             security_worker = asyncio.create_task(maintain_security())
             await storage.initialize()
+            await runtime.initialize()
             await metric_history.initialize()
             # Initial batch keeps existing M0/M1 startup semantics; later sampling
             # has its own worker and never holds the connection orchestration lock.
@@ -190,11 +204,13 @@ def create_app(
             await alert_engine.initialize()
             await alert_engine.evaluate()
             alerts_worker = asyncio.create_task(
-                alert_engine.run(configuration.alerts_interval_seconds)
+                alert_engine.run(lambda: runtime.value("alerts_interval_seconds"))
             )
-            worker = asyncio.create_task(service.run(configuration.poll_interval_seconds))
+            worker = asyncio.create_task(
+                service.run(lambda: runtime.value("poll_interval_seconds"))
+            )
             metrics_worker = asyncio.create_task(
-                service.run_metrics(configuration.metrics_interval_seconds)
+                service.run_metrics(lambda: runtime.value("metrics_interval_seconds"))
             )
             application.state.worker = worker
             application.state.metrics_worker = metrics_worker
@@ -261,6 +277,7 @@ def create_app(
     application.state.terminals = terminals
     application.state.ssh_profiles = profiles
     application.state.pairing = pairing
+    application.state.runtime_settings = runtime
 
     def error_response(status: int, code: str, message: str) -> JSONResponse:
         return JSONResponse({"error": {"code": code, "message": message}}, status_code=status)
@@ -405,6 +422,7 @@ def create_app(
     application.include_router(terminal_router(terminals, security))
     application.include_router(profiles.router(security))
     application.include_router(pairing.router())
+    application.include_router(settings_router(runtime, service, security))
 
     @application.middleware("http")
     async def protected_api(request: Request, call_next: RequestResponseEndpoint) -> Response:

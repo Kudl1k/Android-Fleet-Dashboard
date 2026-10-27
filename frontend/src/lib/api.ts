@@ -45,6 +45,11 @@ export function setControlToken(token: string) {
     controlToken = token;
 }
 export const AUTH_EXPIRED_EVENT = "fleet-auth-expired";
+/** Asks the shell to open its access dialog, e.g. from a page that needs sign-in. */
+export const OPEN_ACCESS_EVENT = "fleet-open-access";
+export function isAccessError(error: unknown) {
+    return error instanceof ApiError && (error.status === 401 || error.status === 403);
+}
 function expireCredential(token: string, status: number) {
     if (status === 401 && token && token === controlToken) {
         controlToken = "";

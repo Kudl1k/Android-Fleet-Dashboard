@@ -26,7 +26,7 @@ it("refreshes at 15 seconds and fetches final observations when a run closes", a
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
     expect(client.getQueryCache().find({ queryKey: ["run-telemetry", "run", true] })?.options).toMatchObject({ refetchInterval: 15000 });
     expect(screen.getByText("CPU usage per core")).toBeInTheDocument();
-    expect(screen.getByText("All accessible temperatures")).toBeInTheDocument();
+    expect(screen.getByText("Temperatures")).toBeInTheDocument();
     expect(screen.getByText("NPU frequency")).toBeInTheDocument();
     mounted.rerender(view(false));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
