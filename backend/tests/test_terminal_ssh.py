@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from pydantic import SecretStr, ValidationError
 
 from android_fleet.security import Actor
-from android_fleet.terminal.profiles import ProfileInput, ProfileService
+from android_fleet.terminal.profiles import ProfileInput, ProfileService, normalize_destination
 from android_fleet.terminal.ssh import SSHGateway
 
 
@@ -193,3 +193,74 @@ async def test_recorded_command_uses_quoted_time_wrapper(
     wrapped = connection.create_process.call_args.kwargs["command"]
     assert shlex.split(wrapped) == ["LC_ALL=C", "command", "time", "-v", "sh", "-c", command]
     assert connect.call_args.kwargs["known_hosts"]
+
+
+async def test_dashboard_destination_approvals_persist(profiles: ProfileService) -> None:
+    spec = body(host="10.0.0.5", port=8022)
+    with pytest.raises(HTTPException) as error:
+        await profiles.save(spec)
+    assert error.value.status_code == 403
+    records = await profiles.add_destination("10.0.0.5:8022", "admin")
+    assert [r["destination"] for r in records if r["created_by"] == "admin"] == ["10.0.0.5:8022"]
+    await profiles.save(spec)
+    reopened = ProfileService(profiles.path, Fernet.generate_key().decode(), ["192.168.1.1:22"])
+    await reopened.initialize()
+    # Environment seeds only the first initialization; later changes come from the dashboard.
+    assert "10.0.0.5:8022" in reopened.destinations
+    assert "192.168.1.1:22" not in reopened.destinations
+    assert "127.0.0.1:5037" not in reopened.destinations
+    await reopened.remove_destination("10.0.0.5:8022")
+    with pytest.raises(HTTPException) as error:
+        await reopened.save(spec)
+    assert error.value.status_code == 403
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [("Host.Lan:22", "host.lan:22"), ("[fd00::1]:8022", "fd00::1:8022")],
+)
+def test_normalize_destination(raw: str, expected: str) -> None:
+    assert normalize_destination(raw) == expected
+
+
+@pytest.mark.parametrize("raw", ["host", "host:0", "host:70000", "host:5037", "a b:22", "h:x"])
+def test_normalize_destination_rejects(raw: str) -> None:
+    with pytest.raises(ValueError):
+        normalize_destination(raw)
+
+
+async def test_destination_rest_requires_admin(profiles: ProfileService, tmp_path: Path) -> None:
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from android_fleet.core.settings import Settings
+    from android_fleet.security import SecurityService
+
+    security = SecurityService(
+        Settings(control_token=SecretStr("admin-token")), tmp_path / "audit.db"
+    )
+    await security.initialize()
+    app = FastAPI()
+    app.include_router(profiles.router(security))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        assert (await client.get("/api/v1/ssh/destinations")).status_code == 401
+        headers = {"authorization": "Bearer admin-token"}
+        bad = await client.post(
+            "/api/v1/ssh/destinations", headers=headers, json={"destination": "h:5037"}
+        )
+        assert bad.status_code == 422
+        added = await client.post(
+            "/api/v1/ssh/destinations", headers=headers, json={"destination": "10.1.1.1:8022"}
+        )
+        assert added.status_code == 200
+        assert "10.1.1.1:8022" in [d["destination"] for d in added.json()["destinations"]]
+        removed = await client.request(
+            "DELETE",
+            "/api/v1/ssh/destinations",
+            headers=headers,
+            json={"destination": "10.1.1.1:8022"},
+        )
+        assert "10.1.1.1:8022" not in [d["destination"] for d in removed.json()["destinations"]]
+    actions = [item["action"] for item in (await security.history())["items"]]
+    assert "terminal.destination.approve" in actions
+    assert "terminal.destination.revoke" in actions

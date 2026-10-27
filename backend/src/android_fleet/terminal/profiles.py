@@ -61,6 +61,33 @@ class Profile(ProfileInput):
     credential: SecretStr | None = Field(default=None, exclude=True)
 
 
+PROHIBITED_PORTS = frozenset({2375, 2376, 5037})
+
+
+def normalize_destination(value: str) -> str:
+    """Return a canonical ``host:port`` entry; IPv6 hosts may be written in brackets."""
+    host, separator, port_text = value.strip().lower().rpartition(":")
+    host = host.removeprefix("[").removesuffix("]")
+    if not separator or not port_text.isdecimal() or not re.fullmatch(r"[a-z0-9.:-]{1,253}", host):
+        raise ValueError("Enter an SSH destination as host:port")
+    port = int(port_text)
+    if not 1 <= port <= 65535:
+        raise ValueError("Enter an SSH destination as host:port")
+    if port in PROHIBITED_PORTS:
+        raise ValueError("SSH destination port is prohibited")
+    return f"{host}:{port}"
+
+
+class DestinationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    destination: str = Field(min_length=3, max_length=260)
+
+    @field_validator("destination")
+    @classmethod
+    def valid_destination(cls, value: str) -> str:
+        return normalize_destination(value)
+
+
 class FingerprintInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     fingerprint: str = Field(min_length=10, max_length=150)
@@ -71,7 +98,8 @@ class ProfileService:
         self._mutation_lock = asyncio.Lock()
         self.path = path
         self.cipher = Fernet(encryption_key.encode()) if encryption_key else None
-        self.destinations = frozenset(destinations)
+        self.seed_destinations = tuple(destinations)
+        self.destinations: set[str] = set()
 
     async def initialize(self) -> None:
         def init() -> None:
@@ -86,6 +114,29 @@ class ProfileService:
                     "CREATE TABLE IF NOT EXISTS termux_destinations "
                     "(device_id TEXT PRIMARY KEY, host TEXT NOT NULL)"
                 )
+                db.execute(
+                    "CREATE TABLE IF NOT EXISTS approved_destinations (destination TEXT PRIMARY "
+                    "KEY, created_at REAL NOT NULL, created_by TEXT NOT NULL)"
+                )
+                db.execute("CREATE TABLE IF NOT EXISTS ssh_settings (key TEXT PRIMARY KEY)")
+                seeded = db.execute(
+                    "SELECT 1 FROM ssh_settings WHERE key='destinations_seeded'"
+                ).fetchone()
+                if seeded is None:
+                    # The environment only seeds the first start; the dashboard owns it after.
+                    for value in self.seed_destinations:
+                        try:
+                            destination = normalize_destination(value)
+                        except ValueError:
+                            continue
+                        db.execute(
+                            "INSERT OR IGNORE INTO approved_destinations VALUES(?,?,?)",
+                            (destination, time.time(), "environment"),
+                        )
+                    db.execute("INSERT INTO ssh_settings(key) VALUES('destinations_seeded')")
+                self.destinations = {
+                    row[0] for row in db.execute("SELECT destination FROM approved_destinations")
+                }
             self.path.chmod(0o600)
 
         await asyncio.to_thread(init)
@@ -96,6 +147,32 @@ class ProfileService:
                 return db.execute(sql, args).fetchall()
 
         return await asyncio.to_thread(run)
+
+    async def destination_records(self) -> list[dict[str, Any]]:
+        rows = await self._query(
+            "SELECT destination,created_at,created_by FROM approved_destinations "
+            "ORDER BY destination"
+        )
+        return [{"destination": row[0], "created_at": row[1], "created_by": row[2]} for row in rows]
+
+    async def add_destination(self, destination: str, actor: str) -> list[dict[str, Any]]:
+        normalized = normalize_destination(destination)
+        async with self._mutation_lock:
+            await self._query(
+                "INSERT OR IGNORE INTO approved_destinations VALUES(?,?,?)",
+                (normalized, time.time(), actor),
+            )
+            self.destinations.add(normalized)
+            return await self.destination_records()
+
+    async def remove_destination(self, destination: str) -> list[dict[str, Any]]:
+        normalized = normalize_destination(destination)
+        async with self._mutation_lock:
+            await self._query(
+                "DELETE FROM approved_destinations WHERE destination=?", (normalized,)
+            )
+            self.destinations.discard(normalized)
+            return await self.destination_records()
 
     async def get(self, profile_id: str) -> Profile:
         rows = await self._query("SELECT profile FROM ssh_profiles WHERE id=?", (profile_id,))
@@ -123,8 +200,12 @@ class ProfileService:
                 )
             )
             if not approved:
-                raise HTTPException(403, "SSH destination is not approved")
-        if profile.port in {2375, 2376, 5037}:
+                raise HTTPException(
+                    403,
+                    f"SSH destination {profile.host}:{profile.port} is not approved. An "
+                    "administrator can approve it under SSH destination access.",
+                )
+        if profile.port in PROHIBITED_PORTS:
             raise HTTPException(403, "SSH destination port is prohibited")
         loop = asyncio.get_running_loop()
         try:
@@ -338,9 +419,29 @@ class ProfileService:
 
         gateway = SSHGateway(self)
         router = APIRouter(prefix="/api/v1/ssh/profiles", tags=["SSH profiles"])
+        destinations = APIRouter(prefix="/api/v1/ssh/destinations", tags=["SSH profiles"])
 
         async def audit(actor: Actor, action: str) -> None:
             await security.audit(actor, None, action, str(uuid.uuid4()), "allowed", "success")
+
+        @destinations.get("")
+        async def list_destinations(request: Request) -> dict[str, Any]:
+            await security.authorize(request, "terminal:profile:manage")
+            return {"destinations": await self.destination_records()}
+
+        @destinations.post("")
+        async def approve_destination(request: Request, body: DestinationInput) -> dict[str, Any]:
+            actor = await security.authorize(request, "terminal:profile:manage")
+            records = await self.add_destination(body.destination, actor.identity)
+            await audit(actor, "terminal.destination.approve")
+            return {"destinations": records}
+
+        @destinations.delete("")
+        async def revoke_destination(request: Request, body: DestinationInput) -> dict[str, Any]:
+            actor = await security.authorize(request, "terminal:profile:manage")
+            records = await self.remove_destination(body.destination)
+            await audit(actor, "terminal.destination.revoke")
+            return {"destinations": records}
 
         @router.get("")
         async def listing(request: Request) -> list[Profile]:
@@ -424,4 +525,7 @@ class ProfileService:
             await audit(actor, "terminal.profile.test")
             return {"status": "connected"}
 
-        return router
+        combined = APIRouter()
+        combined.include_router(router)
+        combined.include_router(destinations)
+        return combined

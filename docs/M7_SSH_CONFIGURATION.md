@@ -15,8 +15,12 @@ one's own session metadata; it does not permit attaching to another user's sessi
 All terminal use requires authenticated identities. SSH profile management and privileged
 session termination remain administrator permissions.
 
-SSH defaults to no destinations. Set `ANDROID_FLEET_SSH_DESTINATIONS` to a JSON array of
-exact `host:port` entries, for example `["android.example.internal:8022"]`. DNS resolution
+SSH defaults to no destinations. Administrators approve exact `host:port` entries, for
+example `192.168.0.34:8022`, in **SSH Connections → SSH destination access**; no container
+change or restart is needed. Approvals persist in `ssh.sqlite3` and can be revoked there.
+Termux setup approves its own phone and port 8022 automatically. The optional
+`ANDROID_FLEET_SSH_DESTINATIONS` JSON array only seeds approvals on the first database
+initialization, like `ANDROID_FLEET_PAIRING_ALLOWED_HOSTS`. DNS resolution
 is pinned at profile approval; changed addresses require editing the profile. Connections
 use the pinned IP and pinned SSH key. Link-local/metadata, multicast, unspecified addresses
 and ports 2375, 2376 and 5037 are rejected. Approve only trusted SSH servers; an approved
