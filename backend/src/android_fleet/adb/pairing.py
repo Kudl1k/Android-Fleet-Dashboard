@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 from android_fleet.adb.base import AdbClient
+from android_fleet.adb.persistent import PersistentTcp, status_payload
 from android_fleet.core.settings import Settings, normalize_pairing_network
 from android_fleet.devices.models import ConnectionType, DeviceState
 from android_fleet.devices.probe import parse_getprop
@@ -95,6 +96,7 @@ class PairingService:
         self.attempts: dict[str, deque[float]] = {}
         self.lock = asyncio.Lock()
         self.verified: dict[tuple[str, str, int], tuple[float, dict[str, Any]]] = {}
+        self.persistence = PersistentTcp(adb, fleet)
 
     async def initialize(self) -> None:
         await asyncio.to_thread(self._initialize)
@@ -399,6 +401,42 @@ class PairingService:
                     actor,
                     device_id,
                     "device.adb_tcp",
+                    str(uuid.uuid4()),
+                    "allowed",
+                    outcome,
+                )
+
+        @router.get("/devices/{device_id}/adb-tcp/persistence")
+        async def persistence_status(device_id: str, request: Request) -> dict[str, Any]:
+            actor = await admin(request)
+            await self.security.authorize_device(actor, device_id, "device.manage")
+            return status_payload(await self.persistence.status(device_id))
+
+        @router.post("/devices/{device_id}/adb-tcp/persistence")
+        async def install_persistence(device_id: str, request: Request) -> dict[str, Any]:
+            actor = await admin(request)
+            await self.security.authorize_device(actor, device_id, "device.manage")
+            outcome = "failed"
+            try:
+                config = await self.fleet.registry.get(device_id)
+                if config.host is None:
+                    raise HTTPException(409, "A network ADB device is required")
+                self.destination(Endpoint(host=config.host, port=5555))
+                self.rate_limit(actor)
+                async with self.lock:
+                    status = await self.persistence.install(device_id)
+                    # The boot script takes over from the next reboot; move a Wireless
+                    # Debugging registration to the fixed port now.
+                    if config.connection_type == ConnectionType.WIRELESS_ADB:
+                        await self.fleet.switch_to_tcp(device_id)
+                        status = await self.persistence.status(device_id)
+                outcome = "succeeded"
+                return status_payload(status)
+            finally:
+                await self.security.audit(
+                    actor,
+                    device_id,
+                    "device.adb_tcp_persistent",
                     str(uuid.uuid4()),
                     "allowed",
                     outcome,

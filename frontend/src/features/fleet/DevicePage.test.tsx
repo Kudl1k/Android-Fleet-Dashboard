@@ -60,6 +60,9 @@ vi.mock("../control/DeviceControl", () => ({
 vi.mock("../management/AdbTcpSwitch", () => ({
     default: () => <button>Switch transport</button>,
 }));
+vi.mock("../management/PersistentAdb", () => ({
+    default: () => null,
+}));
 vi.mock("../terminal/DeviceRunCharts", () => ({
     default: () => <p>Recorded runs</p>,
 }));

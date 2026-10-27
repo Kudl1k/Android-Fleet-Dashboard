@@ -13,6 +13,18 @@ konfiguraci, kterou udělá `setup_device.sh`:
    volá `su` každých 30 s a bez toho by telefon neustále ukazoval toast.
 4. **Okamžité zapnutí** ADB TCP, bez restartu.
 
+## Z dashboardu (doporučeno)
+
+Telefon připojený přes Bezdrátové ladění nebo ADB TCP stačí otevřít v dashboardu. Pro
+administrátora stránka zařízení sama zkontroluje (přes `su`), jestli je boot skript
+nainstalovaný, a pokud není, ukáže upozornění „ADB connection will not survive a reboot“
+s tlačítkem **Install persistent ADB TCP**. To udělá kroky 1–3 níže, zapne firewall
+a telefon z náhodného portu Bezdrátového ladění přepojí na pevný port 5555. IP serveru pro
+firewall se zjistí z aktuálního ADB spojení na telefonu, nic se nezadává ručně. Bez rootu
+(Magisku) dashboard jen vysvětlí, že ADB TCP po restartu zmizí.
+
+Skript níže dělá totéž z příkazové řádky.
+
 ## Požadavky
 
 - Rootnutý telefon s Magiskem.
