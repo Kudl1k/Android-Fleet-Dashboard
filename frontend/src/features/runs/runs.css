@@ -1,0 +1,340 @@
+/* Run status: a running run pulses so it reads as live at a glance. */
+.run-status {
+    text-transform: none;
+    white-space: nowrap;
+}
+.run-status[data-phase="running"] > i {
+    background: var(--accent);
+    animation: run-pulse 1.6s ease-out infinite;
+}
+.run-status[data-phase="stopped"] > i {
+    background: var(--off);
+}
+@keyframes run-pulse {
+    0% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent);
+    }
+    70% {
+        box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent);
+    }
+    100% {
+        box-shadow: 0 0 0 0 transparent;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .run-status[data-phase="running"] > i {
+        animation: none;
+    }
+}
+
+/* Run detail dialog */
+[data-slot="dialog-content"].run-detail {
+    width: min(1120px, calc(100vw - 32px));
+    max-height: calc(100svh - 32px);
+    padding: 28px;
+    gap: 28px;
+}
+.run-detail .run-section-title {
+    margin: 0 0 12px;
+    font-size: 14px;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+    color: var(--muted);
+    text-transform: uppercase;
+}
+.run-detail section {
+    min-width: 0;
+}
+.run-detail-head {
+    display: grid;
+    justify-items: start;
+    gap: 10px;
+    padding-right: 40px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+}
+[data-slot="dialog-title"].run-detail-title {
+    max-width: 100%;
+    font-size: 20px;
+    line-height: 1.35;
+}
+.run-detail-title code {
+    font:
+        600 18px/1.45 ui-monospace,
+        "Cascadia Mono",
+        Consolas,
+        monospace;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+.run-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin: 0;
+}
+.run-stat {
+    display: grid;
+    align-content: start;
+    gap: 4px;
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--panel-raised);
+}
+.run-stat dt {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+.run-stat dd {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+.run-stat[data-tone="ok"] dd {
+    color: var(--green);
+}
+.run-stat[data-tone="critical"] {
+    border-color: color-mix(in srgb, var(--red) 45%, var(--border));
+}
+.run-stat[data-tone="critical"] dd {
+    color: var(--red);
+}
+.run-stat-hint {
+    color: var(--muted);
+    font-size: 12px;
+}
+.run-note {
+    margin: 12px 0 0;
+    font-size: 12px;
+}
+.run-charts {
+    margin: 20px 0 0;
+}
+.run-output {
+    max-height: 360px;
+    margin: 0;
+    padding: 14px 16px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--inset);
+    font:
+        13px/1.5 ui-monospace,
+        "Cascadia Mono",
+        Consolas,
+        monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.run-detail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+.run-detail-actions > a {
+    margin-left: auto;
+}
+
+/* Clickable run rows on the Program runs page */
+.runs-table tbody tr.run-row {
+    cursor: pointer;
+    transition: background-color 120ms ease;
+}
+.runs-table tbody tr.run-row:hover {
+    background: var(--panel-hover);
+}
+.runs-table tbody tr.run-row:focus-within {
+    outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+    outline-offset: -2px;
+}
+.run-open {
+    display: block;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.run-open:focus-visible {
+    outline: none;
+}
+.run-open .run-command {
+    display: block;
+}
+.runs-table .numeric-cell {
+    white-space: nowrap;
+}
+.run-row-chevron {
+    width: 1%;
+    color: var(--muted);
+}
+.runs-table tbody tr.run-row:hover .run-row-chevron {
+    color: var(--accent);
+}
+
+/* Session and run cards in the device terminal history */
+.session-cards {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.session-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-height: 64px;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--panel-raised);
+}
+button.session-card {
+    width: 100%;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        border-color 120ms ease,
+        background-color 120ms ease;
+}
+button.session-card:hover {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    background: var(--panel-hover);
+}
+button.session-card:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+.session-card-main {
+    display: grid;
+    flex: 1;
+    gap: 4px;
+    min-width: 0;
+}
+.session-card-title {
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+code.session-card-title {
+    font:
+        600 13px/1.5 ui-monospace,
+        "Cascadia Mono",
+        Consolas,
+        monospace;
+}
+.session-card-meta {
+    color: var(--muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+.session-card-open {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+}
+button.session-card:hover .session-card-open {
+    color: var(--accent);
+}
+.session-card-actions {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+@media (max-width: 640px) {
+    [data-slot="dialog-content"].run-detail {
+        padding: 20px 16px;
+    }
+    .run-detail-title code {
+        font-size: 14px;
+    }
+    .run-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .run-stat dd {
+        font-size: 18px;
+    }
+    .session-card {
+        flex-wrap: wrap;
+    }
+    .session-card > .status-chip {
+        order: -1;
+    }
+    .session-card-open span {
+        display: none;
+    }
+}
+
+/* Phones: each run becomes a card instead of a wide table row. */
+@media (max-width: 640px) {
+    .runs-table,
+    .runs-table tbody,
+    .runs-table tr,
+    .runs-table td {
+        display: block;
+        width: auto;
+    }
+    .runs-table thead {
+        display: none;
+    }
+    .runs-table tbody tr.run-row {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px 16px;
+        padding: 14px 40px 14px 12px;
+        border-bottom: 1px solid var(--border);
+    }
+    .runs-table td {
+        padding: 0;
+        border: 0;
+    }
+    .runs-table td:nth-child(2) {
+        grid-column: 1 / -1;
+        order: -1;
+    }
+    .runs-table td:first-child {
+        position: absolute;
+        right: 8px;
+        bottom: 12px;
+    }
+    .runs-table td[colspan] {
+        grid-column: 1 / -1;
+    }
+    .runs-table td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .runs-table td.numeric-cell {
+        text-align: left;
+    }
+    .runs-table .run-row-chevron {
+        position: absolute;
+        top: 14px;
+        right: 8px;
+        width: auto;
+    }
+}
