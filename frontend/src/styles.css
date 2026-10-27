@@ -1819,6 +1819,26 @@ label:has(> input[type="checkbox"]) {
 .device-workspace .device-connectivity h3 {
     margin: 0 0 12px;
 }
+.device-workspace .persistent-adb {
+    display: grid;
+    justify-items: start;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.device-workspace .persistent-adb-state {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+.device-workspace .persistent-adb-banner {
+    border-color: color-mix(in srgb, var(--yellow) 55%, var(--border));
+}
+.device-workspace .persistent-adb-banner [data-slot="alert-description"] {
+    display: grid;
+    justify-items: start;
+    gap: 8px;
+}
 .device-workspace .device-setup > h2,
 .device-workspace .terminal-panel > h2,
 .device-workspace .device-control > h2,

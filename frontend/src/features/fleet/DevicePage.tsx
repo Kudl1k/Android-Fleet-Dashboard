@@ -17,6 +17,7 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field";
 import ListRegion from "../../components/ListRegion";
 import AdbTcpSwitch from "../management/AdbTcpSwitch";
+import PersistentAdb from "../management/PersistentAdb";
 import DeviceSetup from "../control/DeviceSetup";
 import DeviceControl from "../control/DeviceControl";
 import LiveScreen from "../screen/LiveScreen";
@@ -248,7 +249,7 @@ function DeviceWorkspace({ id }: { id: string }) {
                         <span>
                             {{
                                 wireless_adb: "Wireless ADB",
-                                tcp: "ADB TCP",
+                                adb_tcp: "ADB TCP",
                                 usb: "USB",
                             }[d.connection_type] ??
                                 d.connection_type.replaceAll("_", " ")}
@@ -335,6 +336,12 @@ function DeviceWorkspace({ id }: { id: string }) {
                     </AlertDescription>
                 </Alert>
             )}
+            <PersistentAdb
+                id={id}
+                connectionType={d.connection_type}
+                online={online}
+                variant="banner"
+            />
             <Tabs
                 value={tab}
                 onValueChange={(value) => {
@@ -541,9 +548,15 @@ function DeviceWorkspace({ id }: { id: string }) {
                                         </Link>
                                     </Button>
                                 </div>
-                                {d.connection_type === "wireless_adb" && (
-                                    <AdbTcpSwitch id={id} online={online} />
-                                )}
+                                <PersistentAdb
+                                    id={id}
+                                    connectionType={d.connection_type}
+                                    online={online}
+                                />
+                                {d.connection_type === "wireless_adb" &&
+                                    d.root_available !== true && (
+                                        <AdbTcpSwitch id={id} online={online} />
+                                    )}
                             </section>
                         </Tool>
                     </section>
