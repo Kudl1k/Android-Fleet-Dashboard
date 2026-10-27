@@ -1650,9 +1650,6 @@ label:has(> input[type="checkbox"]) {
     max-width: 100%;
     min-width: 0;
 }
-.device-workspace .terminal-panel [role="tablist"] {
-    flex-wrap: wrap;
-}
 .device-workspace .device-control .table-scroll {
     max-width: 100%;
     overflow: auto;

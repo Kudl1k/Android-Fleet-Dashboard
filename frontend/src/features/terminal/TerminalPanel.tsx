@@ -1,5 +1,4 @@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import Disclosure from "@/components/Disclosure";
 import { Button } from "@/components/ui/button";
@@ -17,7 +16,15 @@ import {
 } from "@/components/ui/field";
 import ListRegion from "../../components/ListRegion";
 import StateBadge from "../../components/StateBadge";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+    Copy,
+    Eraser,
+    Maximize2,
+    RotateCw,
+    SquareTerminal,
+    X,
+} from "lucide-react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
@@ -70,12 +77,34 @@ export function chunkTerminalInput(data: string): string[] {
     if (chunk) chunks.push(chunk);
     return chunks;
 }
+function stateLed(state: string) {
+    if (state === "active") return "online";
+    if (state === "connecting") return "degraded";
+    if (state === "failed" || state === "timed_out") return "critical";
+    return "";
+}
+function terminalTheme() {
+    const css = getComputedStyle(document.documentElement);
+    const light = document.documentElement.dataset.theme === "light";
+    return {
+        background:
+            css.getPropertyValue("--inset").trim() ||
+            (light ? "#e9edf1" : "#0c0f13"),
+        foreground:
+            css.getPropertyValue("--text").trim() ||
+            (light ? "#141920" : "#e8ecf1"),
+        cursor: css.getPropertyValue("--accent").trim() || "#72a9ff",
+        selectionBackground: light ? "#1d5ccc40" : "#72a9ff55",
+    };
+}
 function TerminalTab({
     target,
     onClose,
+    onStateChange,
 }: {
     target: Target;
     onClose: () => void;
+    onStateChange?: (state: string) => void;
 }) {
     const element = useRef<HTMLDivElement>(null);
     const terminal = useRef<Terminal | null>(null);
@@ -93,11 +122,11 @@ function TerminalTab({
         const term = new Terminal({
             cursorBlink: true,
             scrollback: 2000,
-            fontSize: 14,
-            theme:
-                document.documentElement.dataset.theme === "light"
-                    ? { background: "#ffffff", foreground: "#111827" }
-                    : { background: "#111827", foreground: "#e5e7eb" },
+            fontSize: 13,
+            lineHeight: 1.25,
+            fontFamily:
+                'ui-monospace, "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace',
+            theme: terminalTheme(),
         });
         const fit = new FitAddon();
         term.loadAddon(fit);
@@ -120,10 +149,7 @@ function TerminalTab({
         observer.observe(element.current!);
         resize();
         const themeObserver = new MutationObserver(() => {
-            term.options.theme =
-                document.documentElement.dataset.theme === "light"
-                    ? { background: "#ffffff", foreground: "#111827" }
-                    : { background: "#111827", foreground: "#e5e7eb" };
+            term.options.theme = terminalTheme();
         });
         themeObserver.observe(document.documentElement, {
             attributes: true,
@@ -287,54 +313,65 @@ function TerminalTab({
             if (terminal.current === term) terminal.current = null;
         };
     }, [target, generation, token]);
+    useEffect(() => {
+        onStateChange?.(state);
+    }, [state, onStateChange]);
     return (
         <div className="terminal-tab">
-            <div className="device-session-toolbar">
-                <Badge variant="outline" role="status">
+            <div className="terminal-toolbar">
+                <span className="terminal-status" role="status">
+                    <span className={`led ${stateLed(state)}`} />
                     {state.replaceAll("_", " ")}
-                </Badge>
+                </span>
                 <div
-                    className="actions device-actions"
+                    className="terminal-tools"
                     role="group"
                     aria-label="Terminal session tools"
                 >
                     <Button
-                        variant="outline"
+                        variant="ghost"
                         onClick={() => {
                             setError("");
                             setState("connecting");
                             setGeneration(generation + 1);
                         }}
                     >
-                        Reconnect
+                        <RotateCw aria-hidden="true" />
+                        <span className="terminal-tool-label">Reconnect</span>
                     </Button>
                     <Button
-                        variant="outline"
+                        variant="ghost"
                         onClick={() => terminal.current?.clear()}
                     >
-                        Clear
+                        <Eraser aria-hidden="true" />
+                        <span className="terminal-tool-label">Clear</span>
                     </Button>
                     <Button
-                        variant="outline"
+                        variant="ghost"
                         onClick={() => {
                             const value = terminal.current?.getSelection();
                             if (value)
                                 void navigator.clipboard?.writeText(value);
                         }}
                     >
-                        Copy selection
+                        <Copy aria-hidden="true" />
+                        <span className="terminal-tool-label">
+                            Copy selection
+                        </span>
                     </Button>
                     <Button
-                        variant="outline"
+                        variant="ghost"
                         onClick={() =>
                             void element.current?.parentElement?.requestFullscreen()
                         }
                     >
-                        Fullscreen
+                        <Maximize2 aria-hidden="true" />
+                        <span className="terminal-tool-label">Fullscreen</span>
                     </Button>
                 </div>
                 <Button
                     variant="destructive"
+                    className="terminal-close"
                     onClick={() => {
                         void request(
                             `/api/v1/terminal/sessions/${sessionId.current}`,
@@ -344,11 +381,12 @@ function TerminalTab({
                             .catch((err) => setError(err.message));
                     }}
                 >
-                    Close session
+                    <X aria-hidden="true" />
+                    <span className="terminal-tool-label">Close session</span>
                 </Button>
             </div>
             {error && (
-                <p role="alert" className="error">
+                <p role="alert" className="error terminal-error">
                     {error}
                 </p>
             )}
@@ -470,25 +508,41 @@ export default function TerminalPanel({
     const nextTabId = useRef(0);
     const open = (target: Target, name: string) => {
         const key = String(nextTabId.current++);
-        setTabs((current) => [...current, { key, target, name }]);
+        setTabs((current) => {
+            const same = current.filter(
+                (tab) => tab.name.replace(/ \d+$/, "") === name,
+            ).length;
+            return [
+                ...current,
+                { key, target, name: same ? `${name} ${same + 1}` : name },
+            ];
+        });
         setActive(key);
     };
+    const [tabStates, setTabStates] = useState<Record<string, string>>({});
+    const tabStateHandlers = useRef(new Map<string, (state: string) => void>());
+    const tabStateHandler = useCallback((key: string) => {
+        let handler = tabStateHandlers.current.get(key);
+        if (!handler) {
+            handler = (state: string) =>
+                setTabStates((current) =>
+                    current[key] === state
+                        ? current
+                        : { ...current, [key]: state },
+                );
+            tabStateHandlers.current.set(key, handler);
+        }
+        return handler;
+    }, []);
     if (!canView) return null;
     return (
-        <section className="panel terminal-panel">
-            <h2>Terminal</h2>
-            <p className="muted">
-                Sessions survive browser closure while the backend runs, up to
-                the configured lifetime. Use Close session to terminate.
-                Interactive access is privileged. Sessions start only when you
-                open a tab. Ctrl+Shift+C copies selection; Ctrl+Shift+L clears
-                output.
-            </p>
-            <div className="device-connection-groups">
+        <section className={`terminal-panel${deviceId ? "" : " panel"}`}>
+            {!deviceId && <h2>Terminal</h2>}
+            <div className="terminal-launch">
                 {deviceId && (
-                    <FieldSet className="device-action-group">
+                    <FieldSet className="terminal-launch-group">
                         <FieldLegend>ADB shell</FieldLegend>
-                        <div className="actions device-actions">
+                        <div className="terminal-launch-row">
                             <Button
                                 variant="default"
                                 disabled={!auth.can("terminal:adb") || !online}
@@ -508,9 +562,9 @@ export default function TerminalPanel({
                     </FieldSet>
                 )}
                 {auth.can("terminal:ssh") && (
-                    <FieldSet className="device-action-group">
+                    <FieldSet className="terminal-launch-group terminal-launch-ssh">
                         <FieldLegend>SSH connection</FieldLegend>
-                        <FieldGroup className="actions device-actions device-form-row">
+                        <div className="terminal-launch-row">
                             <NativeSelect
                                 aria-label="SSH connection"
                                 value={profile}
@@ -562,7 +616,7 @@ export default function TerminalPanel({
                             >
                                 Open SSH
                             </Button>
-                        </FieldGroup>
+                        </div>
                     </FieldSet>
                 )}
             </div>
@@ -571,9 +625,78 @@ export default function TerminalPanel({
                     {error}
                 </p>
             )}
+            <div className="terminal-window">
+                {tabs.length > 0 ? (
+                    <Tabs
+                        className="terminal-tabs"
+                        value={active}
+                        onValueChange={setActive}
+                    >
+                        <TabsList aria-label="Terminal sessions">
+                            {tabs.map((tab) => (
+                                <TabsTrigger value={tab.key} key={tab.key}>
+                                    <span
+                                        className={`led ${stateLed(tabStates[tab.key] ?? "connecting")}`}
+                                    />
+                                    {tab.name}
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                        {tabs.map((tab) => (
+                            <TabsContent
+                                value={tab.key}
+                                key={tab.key}
+                                forceMount
+                                hidden={active !== tab.key}
+                            >
+                                <TerminalTab
+                                    target={tab.target}
+                                    onStateChange={tabStateHandler(tab.key)}
+                                    onClose={() => {
+                                        setTabs((current) =>
+                                            current.filter(
+                                                (t) => t.key !== tab.key,
+                                            ),
+                                        );
+                                        if (active === tab.key)
+                                            setActive(
+                                                tabs.find(
+                                                    (t) => t.key !== tab.key,
+                                                )?.key ?? "",
+                                            );
+                                    }}
+                                />
+                            </TabsContent>
+                        ))}
+                    </Tabs>
+                ) : (
+                    <div className="terminal-empty">
+                        <SquareTerminal size={28} aria-hidden="true" />
+                        <p>
+                            <strong>No open terminal</strong>
+                        </p>
+                        <p className="muted">
+                            {deviceId
+                                ? "Open an ADB shell or an SSH connection above. Several sessions can run side by side in tabs."
+                                : "Open the SSH connection above to start a session."}
+                        </p>
+                    </div>
+                )}
+            </div>
+            <p className="terminal-hint muted">
+                <kbd>Ctrl+Shift+C</kbd> copies selection ·{" "}
+                <kbd>Ctrl+Shift+L</kbd> clears output · Sessions keep running
+                after you leave the page (up to the configured lifetime); use
+                Close session to end them.
+            </p>
             {canSSH && (
                 <div className="device-program-run">
                     <h3>Run a program</h3>
+                    <p className="muted">
+                        {selectedProfile
+                            ? `Runs over ${selectedProfile.name} (${selectedProfile.username}@${selectedProfile.host}) and saves the result below.`
+                            : "Select an SSH connection above first. The run opens in a terminal tab and its result is saved below."}
+                    </p>
                     <FieldGroup className="actions device-actions device-form-row">
                         <Field>
                             <FieldLabel>
@@ -622,13 +745,13 @@ export default function TerminalPanel({
                             Record device statistics (15 seconds)
                         </FieldLabel>
                     </Field>
-                    {!selectedProfile?.device_id && (
-                        <span className="muted">
+                    {selectedProfile && !selectedProfile.device_id && (
+                        <p className="muted">
                             Link this SSH profile to an Android device to record
                             its statistics.
-                        </span>
+                        </p>
                     )}
-                    <p className="muted">
+                    <p className="muted terminal-run-note">
                         Requires GNU time (-v) on the SSH host. Saves output,
                         CPU utilization, CPU time, elapsed time and peak RAM for
                         the command and its waited-for children. Output may
@@ -673,7 +796,9 @@ export default function TerminalPanel({
                                     title={
                                         <span className="device-session-title">
                                             {item.command ??
-                                                item.connection_type}
+                                                (item.connection_type === "adb"
+                                                    ? "ADB shell"
+                                                    : "SSH session")}
                                             <small>{item.id}</small>
                                         </span>
                                     }
@@ -824,45 +949,6 @@ export default function TerminalPanel({
                         )}
                 </ListRegion>
             </section>
-            <Tabs value={active} onValueChange={setActive}>
-                {tabs.length > 0 && (
-                    <TabsList aria-label="Terminal sessions">
-                        {tabs.map((tab) => (
-                            <TabsTrigger value={tab.key} key={tab.key}>
-                                {tab.name}
-                            </TabsTrigger>
-                        ))}
-                    </TabsList>
-                )}
-                {tabs.map((tab) => (
-                    <TabsContent
-                        value={tab.key}
-                        key={tab.key}
-                        forceMount
-                        hidden={active !== tab.key}
-                    >
-                        <TerminalTab
-                            target={tab.target}
-                            onClose={() => {
-                                setTabs((current) =>
-                                    current.filter((t) => t.key !== tab.key),
-                                );
-                                if (active === tab.key)
-                                    setActive(
-                                        tabs.find((t) => t.key !== tab.key)
-                                            ?.key ?? "",
-                                    );
-                            }}
-                        />
-                    </TabsContent>
-                ))}
-            </Tabs>
-            {!tabs.length && (
-                <p className="muted">
-                    No terminal sessions. ADB Shell must first be enabled by an
-                    administrator.
-                </p>
-            )}
         </section>
     );
 }

@@ -240,6 +240,10 @@
 [data-slot="tabs"] {
     min-width: 0;
 }
+/* Radix sets data-orientation, so the shadcn data-horizontal:flex-col never matches. */
+[data-slot="tabs"][data-orientation="horizontal"] {
+    flex-direction: column;
+}
 [data-slot="alert"] {
     border: 1px solid var(--border);
     border-radius: 12px;
