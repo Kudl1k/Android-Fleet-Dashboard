@@ -1,1 +1,242 @@
-.terminal-panel {margin: 1.5rem 0}.terminal-panel .actions{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem}.terminal-panel [role=tablist]{display:flex;gap:.5rem;margin-bottom:.75rem}.terminal-panel [aria-selected=true]{border-color:var(--accent);color:var(--accent)}.terminal-viewport{height:380px;min-width:0;padding:.5rem;background:#111827}.terminal-tab:fullscreen{background:var(--panel);padding:1rem}.terminal-tab:fullscreen .terminal-viewport{height:calc(100vh - 100px)}.ssh-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}.ssh-form label{display:flex;flex-direction:column;gap:.4rem}.ssh-form textarea{min-height:100px}.pairing-wizard{margin-bottom:1.5rem}.pairing-wizard form{display:grid;gap:1rem;max-width:560px}.pairing-wizard label{display:flex;flex-direction:column;gap:.4rem}
+.terminal-panel {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+}
+.terminal-panel.panel {
+    margin: 1.5rem 0;
+}
+.terminal-panel > h2 {
+    margin: 0;
+}
+.terminal-panel .actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+/* Connect bar: how a session is opened. */
+.terminal-launch {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px 32px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--panel-raised);
+}
+.terminal-launch-group {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+.terminal-launch-group > legend {
+    padding: 0;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+}
+.terminal-launch-ssh {
+    flex: 1 1 320px;
+}
+.terminal-launch-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.terminal-launch-row > [data-slot="native-select-wrapper"] {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.terminal-launch-row > button {
+    flex: 0 0 auto;
+}
+
+/* Terminal window: session tabs, toolbar and the xterm viewport. */
+.terminal-window {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--inset);
+}
+.terminal-tabs {
+    gap: 0;
+}
+.terminal-window .terminal-tabs [data-slot="tabs-list"] {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    min-height: 40px;
+    padding: 0 6px;
+    gap: 2px;
+    overflow-x: auto;
+    background: var(--panel-raised);
+}
+.terminal-window .terminal-tabs [data-slot="tabs-trigger"] {
+    min-height: 40px;
+    padding: 6px 14px;
+    font-size: 13px;
+}
+.terminal-window
+    .terminal-tabs
+    [data-slot="tabs-trigger"][data-state="active"] {
+    background: var(--panel);
+}
+.terminal-window .terminal-tabs [data-slot="tabs-content"] {
+    margin-top: 0;
+}
+.terminal-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+}
+.terminal-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: capitalize;
+}
+.terminal-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin-left: auto;
+}
+.terminal-toolbar [data-slot="button"] {
+    min-height: 32px;
+    padding: 4px 10px;
+    gap: 6px;
+    font-size: 13px;
+}
+.terminal-toolbar [data-slot="button"] svg {
+    width: 14px;
+    height: 14px;
+}
+.terminal-error {
+    margin: 0;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    font-size: 13px;
+}
+.terminal-viewport {
+    height: clamp(320px, 55vh, 560px);
+    min-width: 0;
+    padding: 8px 4px 8px 12px;
+    background: var(--inset);
+}
+.terminal-tab:fullscreen {
+    display: flex;
+    flex-direction: column;
+    background: var(--inset);
+}
+.terminal-tab:fullscreen .terminal-viewport {
+    flex: 1;
+    height: auto;
+}
+.terminal-empty {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    padding: 56px 16px;
+    text-align: center;
+    color: var(--muted);
+}
+.terminal-empty p {
+    margin: 0;
+    max-width: 46ch;
+}
+.terminal-empty strong {
+    color: var(--text);
+}
+.terminal-hint {
+    margin: -4px 0 0;
+    font-size: 12px;
+}
+.terminal-hint kbd,
+.terminal-run-note kbd {
+    padding: 1px 5px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--panel-raised);
+    font:
+        11px/1.5 ui-monospace,
+        monospace;
+}
+.terminal-panel .device-program-run {
+    margin-block: 8px 0;
+}
+.terminal-panel .device-program-run > h3 + p {
+    margin: 4px 0 0;
+}
+.terminal-panel .device-session-history .device-list-heading {
+    margin-top: 0;
+}
+
+@media (max-width: 640px) {
+    .terminal-launch {
+        padding: 12px;
+    }
+    .terminal-launch-group:not(.terminal-launch-ssh),
+    .terminal-launch-group:not(.terminal-launch-ssh) button {
+        width: 100%;
+    }
+    .terminal-tool-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+    .terminal-toolbar [data-slot="button"] {
+        min-width: 40px;
+        min-height: 40px;
+        justify-content: center;
+    }
+    .terminal-viewport {
+        height: 360px;
+        padding-left: 8px;
+    }
+}
+
+.ssh-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+}
+.ssh-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.ssh-form textarea {
+    min-height: 100px;
+}
+.pairing-wizard {
+    margin-bottom: 1.5rem;
+}
+.pairing-wizard form {
+    display: grid;
+    gap: 1rem;
+    max-width: 560px;
+}
+.pairing-wizard label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}

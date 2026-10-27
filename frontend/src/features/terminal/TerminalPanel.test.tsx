@@ -241,7 +241,7 @@ it("closes a detached session directly from history", async () => {
         name: "Sessions and recorded results",
     });
     await within(history).findByText("active");
-    fireEvent.click(within(history).getByText("ssh"));
+    fireEvent.click(within(history).getByText("SSH session"));
     fireEvent.click(screen.getByText("Close session"));
     await waitFor(() =>
         expect(request).toHaveBeenCalledWith(
