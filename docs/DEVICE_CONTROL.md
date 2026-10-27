@@ -10,13 +10,15 @@ server-side destructive confirmation requires literal JSON `true`.
 | --- | --- | --- |
 | `state` | `control.inspect` | Current fleet-observed connection state; available offline |
 | `properties` | `control.inspect` | Approved getprop values only |
-| `apps.list`, `apps.inspect` | `control.inspect` | Package names; bounded version/install metadata |
+| `apps.list`, `apps.inspect` | `control.inspect` | Packages with removal category, approximate size and removed apps; bounded version/install metadata |
 | `apps.launch` | `apps.launch` | Launcher activity through bounded monkey invocation |
 | `apps.stop` | `apps.stop` | ADB force-stop; UI confirmation |
 | `screen.wake`, `screen.lock` | `control.screen` | Wake/sleep key events; lock depends on Android keyguard policy |
 | `screenshot` | `control.screen` | Bounded PNG from exec-out screencap |
 | `apps.install` | `apps.install` | Validated uploaded APK; no `-g` permission grants |
-| `apps.uninstall` | `apps.uninstall` | Confirmed non-system, non-protected package removal |
+| `apps.uninstall` | `apps.uninstall` | Confirmed removal of a user app or a listed preinstalled app; see App cleanup |
+| `apps.cleanup` | `apps.uninstall` | Confirmed removal of every listed preinstalled app present on the device |
+| `apps.restore` | `apps.install` | Reinstall a removed preinstalled app with `pm install-existing` |
 | `reboot` | `control.reboot` | Confirmed normal reboot |
 | `reboot.recovery`, `reboot.bootloader` | `control.reboot_special` | Always unsupported until vendor capability verification exists |
 
@@ -67,11 +69,32 @@ Manager remains responsible for full manifest semantics and signing validity;
 this is not malware scanning or a certificate trust policy.
 
 Package identifiers use an anchored ASCII segment allowlist and cannot contain shell
-metacharacters, whitespace, options or paths. Uninstall checks Android's system-package
-list and protects `android`, `android.*`, `com.android.*`, `com.google.android.*` and
-`com.samsung.android.*`; this conservative policy can reject benign vendor packages.
-Neither uninstall nor administrator roles bypass validation. Installation does not
+metacharacters, whitespace, options or paths. Neither uninstall nor administrator roles
+bypass validation. Installation does not
 silently grant runtime permissions, root access or allow downgrade/replacement flags.
+
+## App cleanup
+
+Unneeded preinstalled apps take storage and run in the background, which adds noise to
+benchmark runs. `control/packages.py` sorts every package into one category:
+
+- **protected**: never removed. Project tools (Termux, Magisk, `com.android.shell`)
+  and Android parts such as System UI, Settings, telephony, Play services, WebView,
+  the keyboard, the launcher, content providers, vendor (Qualcomm) services and
+  resource overlays.
+- **removable**: preinstalled apps on the curated `REMOVABLE` list (YouTube, Maps,
+  Photos, Chrome, carrier apps, Pixel extras and similar).
+- **system**: any other system package. Kept, because removing an unknown system
+  part can break the phone.
+- **user**: installed by a user; removable unless protected.
+
+Preinstalled apps are removed with `pm uninstall --user 0`. Android deletes their data,
+cache and installed updates; the factory APK stays on the read-only system partition, so
+`apps.restore` can bring the app back. User apps are removed with `adb uninstall` and
+must be installed again. `apps.cleanup` only targets the **removable** category and
+reports removed and failed packages with an estimate of the freed bytes. Sizes come from
+`dumpsys diskstats`, which Android refreshes about once a day, so they are approximate
+and can be missing. The cleanup has a 300 second deadline.
 
 ## Acceptance and M5
 

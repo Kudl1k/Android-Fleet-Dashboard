@@ -1,0 +1,117 @@
+.device-applications-panel {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+    margin-top: 24px;
+}
+.device-applications-panel .device-list-heading,
+.device-applications-panel .device-form-row {
+    margin: 0;
+}
+.app-cleanup {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--panel-raised);
+}
+.app-cleanup > svg {
+    flex-shrink: 0;
+    color: var(--accent);
+}
+.app-cleanup-copy {
+    flex: 1;
+    min-width: 0;
+}
+.app-cleanup-copy p {
+    margin: 4px 0 0;
+    font-size: 13px;
+}
+.app-cleanup-result {
+    color: var(--text);
+}
+.app-cleanup > button {
+    flex-shrink: 0;
+}
+.app-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.app-filters [data-slot="button"] {
+    min-height: 36px;
+    padding: 4px 12px;
+    font-size: 13px;
+    color: var(--muted);
+}
+.app-filters [data-slot="button"][aria-pressed="true"] {
+    background: var(--panel-raised);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--border);
+}
+.app-filter-count {
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--inset);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+.app-identity {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.app-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+.app-category[data-category="removable"] {
+    color: var(--yellow);
+}
+.app-category[data-category="user"] {
+    color: var(--accent);
+}
+.app-category[data-category="protected"] {
+    color: var(--green);
+}
+.app-locked {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 8px;
+    color: var(--muted);
+    font-size: 13px;
+}
+.app-cleanup-list {
+    max-height: 40vh;
+    overflow: auto;
+    margin: 12px 0;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--inset);
+    list-style: none;
+}
+.app-cleanup-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+    .app-cleanup {
+        flex-wrap: wrap;
+    }
+    .app-cleanup > button {
+        width: 100%;
+    }
+}

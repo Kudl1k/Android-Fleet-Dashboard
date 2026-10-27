@@ -16,6 +16,13 @@ if TYPE_CHECKING:
     from android_fleet.setup.service import DeviceSetup
 
 from android_fleet.adb.base import AdbClient
+from android_fleet.control.packages import (
+    PackageCategory,
+    classify,
+    parse_diskstats,
+    parse_packages,
+    removable,
+)
 from android_fleet.core.settings import Settings
 from android_fleet.devices.models import DeviceState
 from android_fleet.devices.service import FleetService
@@ -31,6 +38,8 @@ PERMISSIONS = {
     "reboot.recovery": "control.reboot_special",
     "reboot.bootloader": "control.reboot_special",
     **{f"apps.{v}": f"apps.{v}" for v in ("launch", "stop", "install", "uninstall")},
+    "apps.restore": "apps.install",
+    "apps.cleanup": "apps.uninstall",
 }
 PROPERTIES = (
     "ro.product.manufacturer",
@@ -47,8 +56,10 @@ DESTRUCTIVE = {
     "reboot.recovery",
     "reboot.bootloader",
     "apps.uninstall",
+    "apps.cleanup",
 }
-NONCANCELLABLE = DESTRUCTIVE | {"apps.install", "apps.stop", "apps.launch"}
+NONCANCELLABLE = DESTRUCTIVE | {"apps.install", "apps.restore", "apps.stop", "apps.launch"}
+CLEANUP_TIMEOUT_SECONDS = 300
 
 
 def validate_package(package: str | None) -> str:
@@ -277,7 +288,11 @@ class Manager:
             raise ValueError("Unsupported operation")
         if action in DESTRUCTIVE and not confirmed:
             raise ValueError("Explicit confirmation is required")
-        if action.startswith("apps.") and action not in {"apps.list", "apps.install"}:
+        if action.startswith("apps.") and action not in {
+            "apps.list",
+            "apps.install",
+            "apps.cleanup",
+        }:
             package = validate_package(package)
         if property and property not in PROPERTIES:
             raise ValueError("Property is not allowlisted")
@@ -340,6 +355,8 @@ class Manager:
                         op["action"],
                         600
                         if op["action"].startswith("setup.")
+                        else CLEANUP_TIMEOUT_SECONDS
+                        if op["action"] == "apps.cleanup"
                         else self.settings.operations_timeout_seconds,
                     )
                 ):
@@ -378,6 +395,7 @@ class Manager:
             safe_errors = {
                 "Device is offline": "Device is offline; reconnect before retrying",
                 "Protected package": "Protected/system packages cannot be uninstalled",
+                "Package is not removed": "Only removed preinstalled apps can be restored",
                 (
                     "Special reboot capability is not verified for this device"
                 ): "Recovery/bootloader support is unverified for this device",
@@ -458,14 +476,47 @@ class Manager:
                 "screenshot_url": f"/api/v1/operations/{op['id']}/screenshot",
                 "bytes": len(image),
             }
+
+        async def inventory() -> tuple[set[str], set[str], set[str]]:
+            installed = parse_packages(await shell(("pm", "list", "packages")))
+            system = parse_packages(await shell(("pm", "list", "packages", "-s")))
+            known = parse_packages(await shell(("pm", "list", "packages", "-u")))
+            return installed, system, known - installed
+
+        async def sizes() -> dict[str, int]:
+            # Sizes are informative only; a missing or failing diskstats keeps the list usable.
+            try:
+                return parse_diskstats(await shell(("dumpsys", "diskstats")))
+            except (RuntimeError, TimeoutError):
+                return {}
+
+        async def remove(name: str, system: bool) -> None:
+            if system:
+                output = await shell(("pm", "uninstall", "--user", "0", name))
+                if "Success" not in output:
+                    raise RuntimeError("Android rejected operation")
+                return
+            result = await self.client.command(serial, ("uninstall", name), timeout=timeout)
+            if result.timeout:
+                raise TimeoutError
+            if result.exit_code != 0 or "Success" not in result.stdout:
+                raise RuntimeError("Android rejected operation")
+
         if action == "apps.list":
-            output = await shell(("pm", "list", "packages"))
+            installed, system, removed = await inventory()
+            used = await sizes()
             return {
-                "packages": sorted(
-                    line.removeprefix("package:")
-                    for line in output.splitlines()
-                    if line.startswith("package:")
-                )
+                "packages": sorted(installed),
+                "apps": [
+                    {
+                        "package": name,
+                        "system": name in system,
+                        "category": classify(name, name in system),
+                        "size_bytes": used.get(name),
+                    }
+                    for name in sorted(installed)
+                ],
+                "removed": sorted(removed),
             }
         if action == "apps.inspect":
             output = await shell(("dumpsys", "package", str(package)))
@@ -486,17 +537,41 @@ class Manager:
                 ][:20],
             }
         if action == "apps.uninstall":
-            system = await shell(("pm", "list", "packages", "-s"))
-            if (
-                package in {line.removeprefix("package:") for line in system.splitlines()}
-                or str(package).startswith(
-                    ("android.", "com.android.", "com.google.android.", "com.samsung.android.")
-                )
-                or package == "android"
-            ):
+            system = parse_packages(await shell(("pm", "list", "packages", "-s")))
+            if not removable(classify(str(package), str(package) in system)):
                 raise RuntimeError("Protected package")
-            result = await self.client.command(serial, ("uninstall", str(package)), timeout=timeout)
-        elif action == "apps.install":
+            await remove(str(package), str(package) in system)
+            return {"acknowledged": True, "package": package}
+        if action == "apps.restore":
+            _, _, removed = await inventory()
+            if package not in removed:
+                raise RuntimeError("Package is not removed")
+            output = await shell(("pm", "install-existing", str(package)))
+            if "installed" not in output:
+                raise RuntimeError("Android rejected operation")
+            return {"acknowledged": True, "package": package}
+        if action == "apps.cleanup":
+            installed, system, _ = await inventory()
+            used = await sizes()
+            targets = sorted(
+                name
+                for name in installed
+                if classify(name, name in system) is PackageCategory.REMOVABLE
+            )
+            done: list[str] = []
+            failed: list[str] = []
+            for name in targets:
+                try:
+                    await remove(name, name in system)
+                    done.append(name)
+                except RuntimeError:
+                    failed.append(name)
+            return {
+                "removed": done,
+                "failed": failed,
+                "freed_bytes_estimate": sum(used.get(name, 0) for name in done),
+            }
+        if action == "apps.install":
             assert apk is not None
             result = await self.client.command(serial, ("install", str(apk)), timeout=timeout)
         elif action.startswith("reboot"):
