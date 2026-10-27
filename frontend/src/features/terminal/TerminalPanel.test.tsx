@@ -7,6 +7,7 @@ import {
     within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import TerminalPanel, { chunkTerminalInput } from "./TerminalPanel";
 import { request } from "../../lib/api";
 const auth = { token: "token", identity: {}, can: () => true };
@@ -350,7 +351,11 @@ it("filters device session history without starting or closing sessions", async 
                   ],
               },
     );
-    render(<TerminalPanel deviceId="d1" />);
+    render(
+        <QueryClientProvider client={new QueryClient()}>
+            <TerminalPanel deviceId="d1" />
+        </QueryClientProvider>,
+    );
     const region = screen.getByRole("region", {
         name: "Sessions and recorded results",
     });
@@ -364,9 +369,13 @@ it("filters device session history without starting or closing sessions", async 
     fireEvent.click(
         within(region).getByText("python benchmark-with-a-long-command.py"),
     );
+    const detail = screen.getByRole("dialog", {
+        name: "python benchmark-with-a-long-command.py",
+    });
     expect(
-        within(region).getByRole("button", { name: "Download results" }),
+        within(detail).getByRole("button", { name: "Download results" }),
     ).toBeInTheDocument();
+    fireEvent.keyDown(detail, { key: "Escape" });
     fireEvent.change(screen.getByLabelText("Search sessions"), {
         target: { value: "no-match" },
     });

@@ -1,6 +1,5 @@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import Disclosure from "@/components/Disclosure";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,9 +14,10 @@ import {
     FieldGroup,
 } from "@/components/ui/field";
 import ListRegion from "../../components/ListRegion";
-import StateBadge from "../../components/StateBadge";
+import StatusChip from "../../components/StatusChip";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+    ChevronRight,
     Copy,
     Eraser,
     Maximize2,
@@ -31,7 +31,12 @@ import "@xterm/xterm/css/xterm.css";
 import { request } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import "./terminal.css";
-import RunTelemetry, { type DeviceRecording } from "./RunTelemetry";
+import RunDetail, {
+    RunStatus,
+    useRunElapsed,
+    type RunRecord,
+} from "../runs/RunDetail";
+import { formatDuration } from "../runs/runOutput";
 export interface SSHProfile {
     id: string;
     name: string;
@@ -443,23 +448,14 @@ export default function TerminalPanel({
     }, [canSSH]);
     const [command, setCommand] = useState("");
     const [recordDevice, setRecordDevice] = useState(true);
-    const [expanded, setExpanded] = useState<string | null>(null);
+    const [openedRun, setOpenedRun] = useState<string | null>(null);
     const selectedProfile =
         profiles.find((p) => p.id === profile) ??
         (initialProfile?.id === profile ? initialProfile : undefined);
-    const [history, setHistory] = useState<
-        Array<{
-            id: string;
-            connection_type: "adb" | "ssh";
-            device_id?: string;
-            profile_id?: string;
-            command?: string;
-            output?: string;
-            output_truncated?: boolean;
-            state: string;
-            device_recording?: DeviceRecording;
-        }>
-    >([]);
+    const [history, setHistory] = useState<HistoryItem[]>([]);
+    const runActive = history.some(
+        (item) => item.command && item.state === "active",
+    );
     const [historyLoading, setHistoryLoading] = useState(true);
     const [historyError, setHistoryError] = useState("");
     useEffect(() => {
@@ -485,16 +481,18 @@ export default function TerminalPanel({
                 });
         };
         load();
-        const timer = setInterval(load, 15000);
+        // Poll faster while a program run is in progress.
+        const timer = setInterval(load, runActive ? 3000 : 15000);
         return () => {
             disposed = true;
             clearInterval(timer);
         };
-    }, []);
+    }, [runActive]);
     const [historySearch, setHistorySearch] = useState("");
     const deviceHistory = history.filter(
         (item) => !deviceId || item.device_id === deviceId,
     );
+    const openedRunItem = history.find((item) => item.id === openedRun);
     const filteredHistory = deviceHistory.filter((item) =>
         [item.command, item.id, item.connection_type, item.state]
             .filter(Boolean)
@@ -788,153 +786,46 @@ export default function TerminalPanel({
                     {historyLoading && (
                         <p role="status">Loading session history…</p>
                     )}
-                    <ul className="device-session-list">
+                    <ul className="session-cards">
                         {filteredHistory.map((item) => (
                             <li key={item.id}>
-                                <Disclosure
-                                    className="device-session-record"
-                                    title={
-                                        <span className="device-session-title">
-                                            {item.command ??
-                                                (item.connection_type === "adb"
-                                                    ? "ADB shell"
-                                                    : "SSH session")}
-                                            <small>{item.id}</small>
-                                        </span>
+                                <HistoryCard
+                                    item={item}
+                                    onOpen={() => setOpenedRun(item.id)}
+                                    onResume={() =>
+                                        open(
+                                            {
+                                                connection_type:
+                                                    item.connection_type,
+                                                profile_id: item.profile_id,
+                                                device_id: item.device_id,
+                                                session_id: item.id,
+                                            },
+                                            "Resumed session",
+                                        )
                                     }
-                                    description={
-                                        <StateBadge state={item.state} />
-                                    }
-                                    onOpenChange={(open) => {
-                                        if (open) setExpanded(item.id);
-                                        else
-                                            setExpanded((current) =>
-                                                current === item.id
-                                                    ? null
-                                                    : current,
+                                    onClose={() => {
+                                        void request(
+                                            `/api/v1/terminal/sessions/${item.id}`,
+                                            { method: "DELETE" },
+                                        )
+                                            .then(() =>
+                                                setHistory((current) =>
+                                                    current.map((session) =>
+                                                        session.id === item.id
+                                                            ? {
+                                                                  ...session,
+                                                                  state: "closed",
+                                                              }
+                                                            : session,
+                                                    ),
+                                                ),
+                                            )
+                                            .catch((err) =>
+                                                setError(err.message),
                                             );
                                     }}
-                                >
-                                    <div className="device-run-content">
-                                        <div className="actions device-actions device-session-actions">
-                                            {item.state === "active" && (
-                                                <Button
-                                                    variant="outline"
-                                                    onClick={() =>
-                                                        open(
-                                                            {
-                                                                connection_type:
-                                                                    item.connection_type,
-                                                                profile_id:
-                                                                    item.profile_id,
-                                                                device_id:
-                                                                    item.device_id,
-                                                                session_id:
-                                                                    item.id,
-                                                            },
-                                                            "Resumed session",
-                                                        )
-                                                    }
-                                                >
-                                                    Resume session
-                                                </Button>
-                                            )}
-                                            {item.state === "active" && (
-                                                <Button
-                                                    variant="destructive"
-                                                    onClick={() => {
-                                                        void request(
-                                                            `/api/v1/terminal/sessions/${item.id}`,
-                                                            {
-                                                                method: "DELETE",
-                                                            },
-                                                        )
-                                                            .then(() =>
-                                                                setHistory(
-                                                                    (current) =>
-                                                                        current.map(
-                                                                            (
-                                                                                session,
-                                                                            ) =>
-                                                                                session.id ===
-                                                                                item.id
-                                                                                    ? {
-                                                                                          ...session,
-                                                                                          state: "closed",
-                                                                                      }
-                                                                                    : session,
-                                                                        ),
-                                                                ),
-                                                            )
-                                                            .catch((err) =>
-                                                                setError(
-                                                                    err.message,
-                                                                ),
-                                                            );
-                                                    }}
-                                                >
-                                                    Close session
-                                                </Button>
-                                            )}
-                                        </div>
-                                        {item.command && (
-                                            <>
-                                                <pre>
-                                                    {item.output ??
-                                                        "Waiting for output…"}
-                                                </pre>
-                                                {item.output_truncated && (
-                                                    <p>
-                                                        Only the last 65,536
-                                                        characters are retained.
-                                                    </p>
-                                                )}
-                                                <Button
-                                                    variant="outline"
-                                                    onClick={() => {
-                                                        const url =
-                                                            URL.createObjectURL(
-                                                                new Blob(
-                                                                    [
-                                                                        item.output ??
-                                                                            "",
-                                                                    ],
-                                                                    {
-                                                                        type: "text/plain",
-                                                                    },
-                                                                ),
-                                                            );
-                                                        const link =
-                                                            document.createElement(
-                                                                "a",
-                                                            );
-                                                        link.href = url;
-                                                        link.download = `run-${item.id}.txt`;
-                                                        link.click();
-                                                        URL.revokeObjectURL(
-                                                            url,
-                                                        );
-                                                    }}
-                                                >
-                                                    Download results
-                                                </Button>
-                                            </>
-                                        )}
-                                        {expanded === item.id &&
-                                            item.device_recording?.enabled && (
-                                                <RunTelemetry
-                                                    sessionId={item.id}
-                                                    deviceId={item.device_id}
-                                                    active={
-                                                        item.state === "active"
-                                                    }
-                                                    recording={
-                                                        item.device_recording
-                                                    }
-                                                />
-                                            )}
-                                    </div>
-                                </Disclosure>
+                                />
                             </li>
                         ))}
                     </ul>
@@ -949,6 +840,96 @@ export default function TerminalPanel({
                         )}
                 </ListRegion>
             </section>
+            {openedRunItem && (
+                <RunDetail
+                    run={openedRunItem}
+                    onClose={() => setOpenedRun(null)}
+                />
+            )}
         </section>
+    );
+}
+type HistoryItem = RunRecord & {
+    connection_type: "adb" | "ssh";
+    profile_id?: string;
+    device_id?: string;
+    command?: string;
+};
+function HistoryCard({
+    item,
+    onOpen,
+    onResume,
+    onClose,
+}: {
+    item: HistoryItem;
+    onOpen: () => void;
+    onResume: () => void;
+    onClose: () => void;
+}) {
+    const elapsed = useRunElapsed(item);
+    const started = item.created_at
+        ? new Date(item.created_at * 1000).toLocaleString()
+        : undefined;
+    if (item.command) {
+        const samples = item.device_recording?.enabled
+            ? `${item.device_recording.sample_count} samples`
+            : "no device statistics";
+        return (
+            <button
+                type="button"
+                className="session-card"
+                onClick={onOpen}
+                aria-label={`Open run details: ${item.command}`}
+            >
+                <RunStatus run={item} />
+                <span className="session-card-main">
+                    <code className="session-card-title">{item.command}</code>
+                    <span className="session-card-meta">
+                        {[started, formatDuration(elapsed), samples]
+                            .filter(Boolean)
+                            .join(" · ")}
+                    </span>
+                </span>
+                <span className="session-card-open" aria-hidden="true">
+                    <span>Details</span>
+                    <ChevronRight size={18} />
+                </span>
+            </button>
+        );
+    }
+    const active = item.state === "active";
+    return (
+        <div className="session-card">
+            <StatusChip
+                value={active ? "running" : item.state}
+                label={active ? "active" : item.state.replaceAll("_", " ")}
+            />
+            <span className="session-card-main">
+                <span className="session-card-title">
+                    {item.connection_type === "adb"
+                        ? "ADB shell"
+                        : "SSH session"}
+                </span>
+                <span className="session-card-meta">
+                    {[
+                        started,
+                        formatDuration(elapsed),
+                        item.termination_reason?.replaceAll("_", " "),
+                    ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                </span>
+            </span>
+            {active && (
+                <span className="session-card-actions">
+                    <Button variant="outline" onClick={onResume}>
+                        Resume session
+                    </Button>
+                    <Button variant="destructive" onClick={onClose}>
+                        Close session
+                    </Button>
+                </span>
+            )}
+        </div>
     );
 }

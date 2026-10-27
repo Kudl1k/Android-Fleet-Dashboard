@@ -1,16 +1,17 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { Download, FlaskConical, GitCompareArrows, X } from "lucide-react";
+import { ChevronRight, Download, FlaskConical, GitCompareArrows, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import StatusChip from "../../components/StatusChip";
 import ListRegion from "../../components/ListRegion";
 import { formatMetric, request } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { useDevices } from "../../lib/hooks";
-import MetricChart, { formatElapsed } from "../telemetry/MetricChart";
+import MetricChart from "../telemetry/MetricChart";
 import { loadRunTelemetry, type DeviceRecording } from "../terminal/RunTelemetry";
 import { alignRun, hottestOverall, summarizeRun, type RunSummary } from "./runSummary";
+import RunDetail, { RunStatus, useRunElapsed } from "./RunDetail";
+import { formatDuration } from "./runOutput";
 
 interface Run {
     id: string;
@@ -21,7 +22,14 @@ interface Run {
     ended_at: number | null;
     duration: number;
     state: string;
+    output?: string | null;
+    output_truncated?: boolean;
+    termination_reason?: string | null;
     device_recording?: DeviceRecording;
+}
+
+function LiveDuration({ run }: { run: Run }) {
+    return <>{formatDuration(useRunElapsed(run))}</>;
 }
 
 const compareMetrics: { name: string; title: string; unit: string; hottest?: boolean }[] = [
@@ -34,6 +42,8 @@ const compareMetrics: { name: string; title: string; unit: string; hottest?: boo
 function percent(value: number | null) {
     return value === null ? "—" : `${(value * 100).toFixed(1)}%`;
 }
+
+const summaryLabels = ["CPU avg / peak", "RAM peak", "Hottest", "Throttled", "Battery used"];
 
 function summaryCells(summary: RunSummary | undefined) {
     if (!summary) return ["…", "…", "…", "…", "…"];
@@ -56,10 +66,13 @@ export default function RunsPage() {
     const allowed = auth.can("terminal:view");
     const [device, setDevice] = useState("");
     const [compare, setCompare] = useState<string[]>([]);
+    const [opened, setOpened] = useState<string | null>(null);
     const sessions = useQuery({
         queryKey: ["runs"],
         queryFn: ({ signal }) => request<{ items: Run[] }>("/api/v1/terminal/sessions", { signal }),
-        refetchInterval: 15000,
+        // Poll faster while a run is in progress so its status flips promptly.
+        refetchInterval: (query) =>
+            query.state.data?.items.some((run) => run.command && run.state === "active") ? 3000 : 15000,
         enabled: allowed,
     });
     const runs = useMemo(
@@ -91,6 +104,7 @@ export default function RunsPage() {
     const compared = compare
         .map((id) => recorded.find((run) => run.id === id))
         .filter((run): run is Run => Boolean(run));
+    const openedRun = runs.find((run) => run.id === opened);
     const runLabel = (run: Run, index: number) =>
         `${String.fromCharCode(65 + index)}: ${name(run.device_id)}`;
     function toggleCompare(id: string) {
@@ -183,21 +197,27 @@ export default function RunsPage() {
                                 <tr>
                                     <th scope="col">Compare</th>
                                     <th scope="col">Run</th>
-                                    <th scope="col">State</th>
+                                    <th scope="col">Status</th>
                                     <th scope="col" className="numeric-cell">Duration</th>
                                     <th scope="col">CPU avg / peak</th>
                                     <th scope="col">RAM peak</th>
                                     <th scope="col">Hottest</th>
                                     <th scope="col">Throttled</th>
                                     <th scope="col">Battery used</th>
+                                    <th scope="col"><span className="sr-only">Details</span></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {runs.map((run) => {
                                     const isRecorded = Boolean(run.device_recording?.enabled);
                                     return (
-                                        <tr key={run.id} data-selected={compare.includes(run.id) || undefined}>
-                                            <td>
+                                        <tr
+                                            key={run.id}
+                                            className="run-row"
+                                            data-selected={compare.includes(run.id) || undefined}
+                                            onClick={() => setOpened(run.id)}
+                                        >
+                                            <td onClick={(event) => event.stopPropagation()}>
                                                 <input
                                                     type="checkbox"
                                                     className="run-compare"
@@ -210,27 +230,45 @@ export default function RunsPage() {
                                             <td>
                                                 <strong>
                                                     {run.device_id ? (
-                                                        <Link to={`/devices/${encodeURIComponent(run.device_id)}`}>{name(run.device_id)}</Link>
+                                                        <Link
+                                                            to={`/devices/${encodeURIComponent(run.device_id)}`}
+                                                            onClick={(event) => event.stopPropagation()}
+                                                        >
+                                                            {name(run.device_id)}
+                                                        </Link>
                                                     ) : (
                                                         name(run.device_id)
                                                     )}
                                                 </strong>
-                                                <code className="run-command" title={run.command ?? ""}>{run.command}</code>
+                                                <button
+                                                    type="button"
+                                                    className="run-open"
+                                                    aria-label={`Open details of ${run.command}`}
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        setOpened(run.id);
+                                                    }}
+                                                >
+                                                    <code className="run-command" title={run.command ?? ""}>{run.command}</code>
+                                                </button>
                                                 <span className="muted">
                                                     {new Date(run.created_at * 1000).toLocaleString()} · {run.owner}
                                                 </span>
                                             </td>
-                                            <td><StatusChip value={run.state} /></td>
-                                            <td className="numeric-cell">{formatElapsed(run.duration * 1000)}</td>
+                                            <td><RunStatus run={run} /></td>
+                                            <td className="numeric-cell" data-label="Duration"><LiveDuration run={run} /></td>
                                             {isRecorded ? (
                                                 summaryCells(summaries.get(run.id)).map((cell, index) => (
-                                                    <td key={index}>{cell}</td>
+                                                    <td key={index} data-label={summaryLabels[index]}>{cell}</td>
                                                 ))
                                             ) : (
                                                 <td colSpan={5} className="muted">
                                                     Statistics were not recorded for this run
                                                 </td>
                                             )}
+                                            <td className="run-row-chevron">
+                                                <ChevronRight size={18} aria-hidden="true" />
+                                            </td>
                                         </tr>
                                     );
                                 })}
@@ -239,6 +277,9 @@ export default function RunsPage() {
                     </ListRegion>
                 )}
             </section>
+            {openedRun && (
+                <RunDetail run={openedRun} deviceName={name(openedRun.device_id)} onClose={() => setOpened(null)} />
+            )}
             {compared.length === 2 && (
                 <section className="panel run-comparison" aria-label="Run comparison">
                     <div className="results-heading">

@@ -335,3 +335,133 @@ it("associates APK validation with the upload field without requesting an operat
             .mock.calls.some(([, options]) => options?.method === "POST"),
     ).toBe(false);
 });
+describe("application cleanup", () => {
+    const classified = {
+        items: [
+            {
+                id: "apps",
+                action: "apps.list",
+                state: "succeeded",
+                created_at: 10,
+                duration: 1,
+                result: {
+                    packages: [],
+                    apps: [
+                        {
+                            package: "com.google.android.youtube",
+                            system: true,
+                            category: "removable",
+                            size_bytes: 250_000_000,
+                        },
+                        {
+                            package: "com.google.android.apps.maps",
+                            system: true,
+                            category: "removable",
+                            size_bytes: 150_000_000,
+                        },
+                        {
+                            package: "com.termux",
+                            system: false,
+                            category: "protected",
+                            size_bytes: null,
+                        },
+                        {
+                            package: "org.fdroid.fdroid",
+                            system: false,
+                            category: "user",
+                            size_bytes: null,
+                        },
+                    ],
+                    removed: ["com.google.android.apps.photos"],
+                },
+            },
+        ],
+        total: 1,
+    };
+    beforeEach(() => {
+        auth.identity.permissions.push(
+            "control.inspect",
+            "apps.uninstall",
+            "apps.install",
+            "apps.stop",
+        );
+        vi.mocked(request).mockResolvedValue(classified);
+    });
+    it("lists removable apps first and locks protected ones", async () => {
+        show(<DeviceControl id="d1" online />);
+        await screen.findByText("com.google.android.youtube");
+        expect(screen.queryByText("com.termux")).not.toBeInTheDocument();
+        fireEvent.click(
+            screen.getByRole("button", { name: /Protected & system/ }),
+        );
+        const region = screen.getByRole("region", {
+            name: "Installed applications",
+        });
+        expect(within(region).getByText("com.termux")).toBeInTheDocument();
+        expect(
+            within(region).queryByRole("button", { name: /Remove|Uninstall/ }),
+        ).not.toBeInTheDocument();
+        fireEvent.click(
+            screen.getByRole("button", { name: /Installed by user/ }),
+        );
+        fireEvent.click(
+            within(region).getByRole("button", { name: "Uninstall" }),
+        );
+        expect(
+            screen.getByRole("alertdialog", { name: "Confirm apps.uninstall" }),
+        ).toHaveTextContent("org.fdroid.fdroid will be removed");
+    });
+    it("previews the cleanup and submits it confirmed", async () => {
+        show(<DeviceControl id="d1" online />);
+        await screen.findByText(/Removes 2 preinstalled apps/);
+        expect(screen.getByText(/about 400 MB/)).toBeInTheDocument();
+        fireEvent.click(
+            screen.getByRole("button", { name: "Clean up phone…" }),
+        );
+        const dialog = screen.getByRole("alertdialog", {
+            name: "Clean up phone",
+        });
+        expect(
+            within(dialog).getByText("com.google.android.apps.maps"),
+        ).toBeInTheDocument();
+        expect(
+            within(dialog).queryByText("com.termux"),
+        ).not.toBeInTheDocument();
+        fireEvent.click(
+            within(dialog).getByRole("button", { name: "Remove 2 apps" }),
+        );
+        await waitFor(() =>
+            expect(request).toHaveBeenCalledWith(
+                "/api/v1/devices/d1/operations",
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        action: "apps.cleanup",
+                        confirmed: true,
+                    }),
+                },
+            ),
+        );
+    });
+    it("restores removed apps", async () => {
+        show(<DeviceControl id="d1" online />);
+        await screen.findByText("com.google.android.youtube");
+        fireEvent.click(screen.getByRole("button", { name: /^Removed/ }));
+        expect(
+            screen.getByText("com.google.android.apps.photos"),
+        ).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+        await waitFor(() =>
+            expect(request).toHaveBeenCalledWith(
+                "/api/v1/devices/d1/operations",
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        action: "apps.restore",
+                        package: "com.google.android.apps.photos",
+                    }),
+                },
+            ),
+        );
+    });
+});

@@ -6,14 +6,6 @@ import {
     DialogDescription,
 } from "@/components/ui/dialog";
 import Disclosure from "@/components/Disclosure";
-import {
-    Table,
-    TableHeader,
-    TableRow,
-    TableHead,
-    TableBody,
-    TableCell,
-} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,15 +14,15 @@ import {
     FieldError,
     FieldSet,
     FieldLegend,
-    FieldGroup,
 } from "@/components/ui/field";
 import ListRegion from "../../components/ListRegion";
 import StateBadge from "../../components/StateBadge";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { protectedImage, request } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import Confirmation from "../management/Confirmation";
+import ApplicationsPanel from "./ApplicationsPanel";
 import {
     active,
     operationPermission,
@@ -46,7 +38,6 @@ export default function DeviceControl(props: { id: string; online: boolean }) {
 function DeviceControlSession({ id, online }: { id: string; online: boolean }) {
     const auth = useAuth();
     const client = useQueryClient();
-    const [search, setSearch] = useState("");
     const [confirm, setConfirm] = useState<{
         action: string;
         package?: string;
@@ -92,27 +83,18 @@ function DeviceControlSession({ id, online }: { id: string; online: boolean }) {
         mutation.isPending ||
         upload.isPending ||
         Boolean(operations.data?.items.some(active));
-    const allowed = (action: string) => auth.can(operationPermission(action));
+    const allowed = useCallback(
+        (action: string) => auth.can(operationPermission(action)),
+        [auth],
+    );
     const list = operations.data?.items.find(
         (op) => op.action === "apps.list" && op.state === "succeeded",
     );
-    const raw = list?.result?.packages ?? list?.result?.applications ?? [];
-    const packages = Array.isArray(raw)
-        ? raw
-              .map((item) =>
-                  typeof item === "string"
-                      ? item
-                      : String(
-                            (item as { package?: string; name?: string })
-                                .package ??
-                                (item as { name?: string }).name ??
-                                "",
-                        ),
-              )
-              .filter(Boolean)
-        : [];
-    const filteredPackages = packages.filter((pkg) =>
-        pkg.toLowerCase().includes(search.toLowerCase()),
+    const { mutate } = mutation;
+    const submit = useCallback(
+        (body: { action: string; package?: string; confirmed?: boolean }) =>
+            mutate(body),
+        [mutate],
     );
     useEffect(
         () => () => {
@@ -225,128 +207,19 @@ function DeviceControlSession({ id, online }: { id: string; online: boolean }) {
                     {mutation.error?.message}
                 </p>
             )}
-            <div className="device-list-heading">
-                <h3>Installed applications</h3>
-                <span className="muted">
-                    {filteredPackages.length} of {packages.length} loaded
-                </span>
-            </div>
-            <FieldGroup className="actions device-actions device-form-row">
-                <Field>
-                    <FieldLabel>
-                        Search applications
-                        <Input
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            type="search"
-                        />
-                    </FieldLabel>
-                </Field>
-                {actionButton("apps.list", "Refresh applications")}
-            </FieldGroup>
-            <ListRegion
-                label="Installed applications"
-                className="device-applications"
-            >
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead scope="col">Package</TableHead>
-                            <TableHead scope="col">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {filteredPackages.map((pkg) => (
-                            <TableRow key={pkg}>
-                                <TableCell>
-                                    <span
-                                        className="device-cell-label"
-                                        aria-hidden="true"
-                                    >
-                                        Package
-                                    </span>
-                                    <span className="mono">{pkg}</span>
-                                </TableCell>
-                                <TableCell>
-                                    <span
-                                        className="device-cell-label"
-                                        aria-hidden="true"
-                                    >
-                                        Actions
-                                    </span>
-                                    <div className="actions device-actions device-package-actions">
-                                        <div
-                                            className="device-package-group"
-                                            role="group"
-                                            aria-label={`Inspect or launch ${pkg}`}
-                                        >
-                                            {[
-                                                ["apps.inspect", "Inspect"],
-                                                ["apps.launch", "Launch"],
-                                            ].map(([action, label]) => (
-                                                <Button
-                                                    variant="outline"
-                                                    key={action}
-                                                    disabled={
-                                                        !online ||
-                                                        busy ||
-                                                        !allowed(action)
-                                                    }
-                                                    onClick={() =>
-                                                        mutation.mutate({
-                                                            action,
-                                                            package: pkg,
-                                                        })
-                                                    }
-                                                >
-                                                    {label}
-                                                </Button>
-                                            ))}
-                                        </div>
-                                        <div
-                                            className="device-package-group device-package-danger"
-                                            role="group"
-                                            aria-label={`Stop or uninstall ${pkg}`}
-                                        >
-                                            {[
-                                                ["apps.stop", "Force-stop"],
-                                                ["apps.uninstall", "Uninstall"],
-                                            ].map(([action, label]) => (
-                                                <Button
-                                                    variant="destructive"
-                                                    key={action}
-                                                    disabled={
-                                                        !online ||
-                                                        busy ||
-                                                        !allowed(action)
-                                                    }
-                                                    onClick={() =>
-                                                        setConfirm({
-                                                            action,
-                                                            package: pkg,
-                                                        })
-                                                    }
-                                                >
-                                                    {label}
-                                                </Button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-                {filteredPackages.length === 0 && (
-                    <p className="muted list-empty">
-                        {packages.length
-                            ? "No applications match this search."
-                            : list
-                              ? "No application records returned."
-                              : "Refresh applications to retrieve the installed package list."}
-                    </p>
+            <ApplicationsPanel
+                list={list}
+                operations={operations.data?.items ?? []}
+                online={online}
+                busy={busy}
+                allowed={allowed}
+                submit={submit}
+                requestConfirm={setConfirm}
+                refreshButton={actionButton(
+                    "apps.list",
+                    "Refresh applications",
                 )}
-            </ListRegion>
+            />
             <div className="device-upload">
                 <Field data-invalid={Boolean(apkError || upload.error)}>
                     <FieldLabel>
@@ -531,11 +404,7 @@ function DeviceControlSession({ id, online }: { id: string; online: boolean }) {
                     title={`Confirm ${confirm.action}`}
                     onCancel={() => setConfirm(null)}
                 >
-                    <p>
-                        This action affects {confirm.package ?? "the device"}.
-                        Reboot modes depend on device support and may interrupt
-                        connectivity.
-                    </p>
+                    <p>{confirmMessage(confirm)}</p>
                     <div className="actions device-dialog-actions">
                         <Button
                             variant="outline"
@@ -561,4 +430,17 @@ function DeviceControlSession({ id, online }: { id: string; online: boolean }) {
             )}
         </section>
     );
+}
+function confirmMessage({
+    action,
+    package: name,
+}: {
+    action: string;
+    package?: string;
+}) {
+    if (action === "apps.uninstall")
+        return `${name} will be removed together with its data. A preinstalled app can be restored later from the Removed list; an app installed by a user has to be installed again.`;
+    if (action === "apps.stop")
+        return `${name} will be stopped immediately. Unsaved work in the app is lost.`;
+    return `This action affects ${name ?? "the device"}. Reboot modes depend on device support and may interrupt connectivity.`;
 }
