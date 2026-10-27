@@ -33,6 +33,19 @@ describe("API integration", () => {
         ).toBe("Bearer private");
         expect(localStorage.getItem("private")).toBeNull();
     });
+    it("remembers the token across reloads and forgets it on sign-out or rejection", async () => {
+        setControlToken("kept");
+        expect(localStorage.getItem("fleet-control-token")).toBe("kept");
+        vi.resetModules();
+        const reloaded = await import("./api");
+        expect(reloaded.getControlToken()).toBe("kept");
+        reloaded.setControlToken("");
+        expect(localStorage.getItem("fleet-control-token")).toBeNull();
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 401 })));
+        reloaded.setControlToken("revoked");
+        await expect(reloaded.request("/api/v1/devices")).rejects.toThrow();
+        expect(localStorage.getItem("fleet-control-token")).toBeNull();
+    });
     it("fetches screenshots with the memory credential and rejects denied images", async () => {
         const fetch = vi.fn().mockResolvedValueOnce(new Response("png", {headers:{"Content-Type":"image/png"}})).mockResolvedValueOnce(new Response(null, {status:403}));
         vi.stubGlobal("fetch", fetch);
