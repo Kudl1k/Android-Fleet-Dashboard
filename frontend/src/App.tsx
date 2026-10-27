@@ -263,8 +263,8 @@ export default function App() {
                         <p className="muted">
                             Enter your viewer, operator or administrator token to access
                             fleet data and permitted actions. The
-                            token stays in memory and is cleared when this page
-                            closes or reloads.
+                            token is remembered in this browser until you sign out
+                            or it stops being valid.
                         </p>
                         {auth.error && <p className="error" role="alert">{auth.error}</p>}
                         <form

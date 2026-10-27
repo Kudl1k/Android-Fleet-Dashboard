@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AUTH_EXPIRED_EVENT, request, setControlToken } from "./api";
+import { AUTH_EXPIRED_EVENT, getControlToken, request, setControlToken } from "./api";
 export interface Identity { identity: string; role: string; permissions: string[] }
 const AuthContext = createContext({ token: "", identity: undefined as Identity | undefined, error: "", can: (_permission: string): boolean => { void _permission; return false; }, setToken: (_token: string) => { void _token; } });
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const [token, update] = useState("");
+    const [token, update] = useState(getControlToken);
     const client = useQueryClient();
     useEffect(() => {
         const expired = () => { update(""); client.clear(); };

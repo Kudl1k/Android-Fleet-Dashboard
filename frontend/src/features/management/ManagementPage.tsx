@@ -103,7 +103,7 @@ export default function ManagementPage() {
             {!token && (
                 <p className="panel">
                     Enter your control token in the navigation to enable
-                    management. It stays in memory for this session.
+                    management. It is remembered in this browser until you sign out.
                 </p>
             )}
             <PairingWizard />
