@@ -63,7 +63,8 @@ async def test_current_metrics_stale_and_offline_values_are_absent() -> None:
     app = create_app(FakeAdbClient(), settings())
     async with app.router.lifespan_context(app):
         async with AsyncClient(transport=ASGITransport(app), base_url="http://test") as client:
-            old = datetime.now(UTC) - timedelta(seconds=100)
+            # Older than three collection intervals (3600 s each in these settings).
+            old = datetime.now(UTC) - timedelta(hours=4)
             app.state.fleet.snapshots["pixel-rooted"] = MetricSnapshot(
                 "pixel-rooted", old, (MetricValue("battery_level", 0.5, "ratio"),)
             )

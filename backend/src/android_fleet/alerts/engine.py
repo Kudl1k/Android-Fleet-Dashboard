@@ -21,10 +21,12 @@ class AlertEngine:
         *,
         max_age_seconds: float,
         retention_seconds: int = 2592000,
+        max_age_for: Callable[[str], float] | None = None,
     ) -> None:
         self.store = store
         self.fleet = fleet
         self.max_age_seconds = max_age_seconds
+        self.max_age_for = max_age_for
         self.healthy = True
         self.retention_seconds = retention_seconds
         self.evaluations_total = 0
@@ -76,6 +78,9 @@ class AlertEngine:
 
             await self.store.mark_defaults_seeded()
 
+    def _max_age(self, device_id: str) -> float:
+        return self.max_age_for(device_id) if self.max_age_for else self.max_age_seconds
+
     def _value(self, rule: Rule, device_id: str, now: datetime) -> float | None:
         device = self.fleet.devices.get(device_id)
         if device is None:
@@ -96,15 +101,15 @@ class AlertEngine:
                 return 0
             if snapshot is not None and valid_values:
                 self._missing_since.pop(device_id, None)
-                since = snapshot.observed_at
-            else:
-                since = self._missing_since.setdefault(device_id, now)
-
+                # A slower collection interval is expected silence, not stale telemetry.
+                allowance = self._max_age(device_id) - self.max_age_seconds
+                return max(0, (now - snapshot.observed_at).total_seconds() - allowance)
+            since = self._missing_since.setdefault(device_id, now)
             return max(0, (now - since).total_seconds())
         if device.state != DeviceState.ONLINE or snapshot is None:
             return None
         age = (now - snapshot.observed_at).total_seconds()
-        if age < 0 or age > self.max_age_seconds:
+        if age < 0 or age > self._max_age(device_id):
             return None
         values = {value.name: value.value for value in valid_values if not value.labels}
         metric = {
