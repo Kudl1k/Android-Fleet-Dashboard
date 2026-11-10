@@ -433,3 +433,35 @@ it("preserves both terminal transports when switching shadcn tabs and reports op
             .mock.calls.filter(([, options]) => options?.method === "DELETE"),
     ).toHaveLength(0);
 });
+it("closes a tab whose connection attempt never created a session", async () => {
+    vi.mocked(request).mockImplementation(async (path, options) => {
+        if (path === "/api/v1/terminal/sessions" && options?.method === "POST")
+            throw new Error("Terminal connection failed");
+        return path.endsWith("/profiles") ? [] : { id: "session" };
+    });
+    render(<TerminalPanel deviceId="d1" />);
+    fireEvent.click(screen.getByText("Open ADB Shell"));
+    await screen.findByText("Terminal connection failed");
+    fireEvent.click(screen.getByRole("button", { name: "Close session" }));
+    await waitFor(() => expect(screen.queryAllByRole("tab")).toHaveLength(0));
+    expect(request).not.toHaveBeenCalledWith(
+        expect.stringMatching(/^\/api\/v1\/terminal\/sessions\/$/),
+        { method: "DELETE" },
+    );
+});
+it("closes a tab when the server no longer knows its session", async () => {
+    vi.mocked(request).mockImplementation(async (path, options) => {
+        if (options?.method === "DELETE")
+            throw Object.assign(new Error("Not found"), { status: 404 });
+        return path.endsWith("/profiles")
+            ? []
+            : path.endsWith("/ticket")
+              ? { ticket: "one-use", protocol: "fleet-terminal.v1" }
+              : { id: "session" };
+    });
+    render(<TerminalPanel deviceId="d1" />);
+    fireEvent.click(screen.getByText("Open ADB Shell"));
+    await waitFor(() => expect(connections).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: "Close session" }));
+    await waitFor(() => expect(screen.queryAllByRole("tab")).toHaveLength(0));
+});
