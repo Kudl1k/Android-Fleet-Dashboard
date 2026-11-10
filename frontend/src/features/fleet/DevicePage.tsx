@@ -33,8 +33,11 @@ import {
     SlidersHorizontal,
     Wrench,
     ChartNoAxesCombined,
+    FolderOpen,
 } from "lucide-react";
+import { useAuth } from "../../lib/auth";
 import DeviceTelemetry from "./DeviceTelemetry";
+import FileManager from "../files/FileManager";
 import DeviceInterval from "./DeviceInterval";
 import { grafanaDeviceUrl } from "../../lib/grafana";
 import { Link, useParams } from "react-router-dom";
@@ -128,6 +131,9 @@ function DeviceWorkspace({ id }: { id: string }) {
     const polling = useContext(PollContext);
     const [tab, setTab] = useState("overview");
     const [historyOpened, setHistoryOpened] = useState(false);
+    // Files load on first selection, like history, and keep their folder afterwards.
+    const [filesOpened, setFilesOpened] = useState(false);
+    const auth = useAuth();
     const [terminalTabs, setTerminalTabs] = useState(0);
     const [screenState, setScreenState] = useState("stopped");
     if (device.isPending)
@@ -347,6 +353,7 @@ function DeviceWorkspace({ id }: { id: string }) {
                 onValueChange={(value) => {
                     setTab(value);
                     if (value === "history") setHistoryOpened(true);
+                    if (value === "files") setFilesOpened(true);
                 }}
                 className="device-tabs"
             >
@@ -366,6 +373,9 @@ function DeviceWorkspace({ id }: { id: string }) {
                             </Badge>
                         )}
                     </TabsTrigger>
+                    {auth.can("files.read") && (
+                        <TabsTrigger value="files">Files</TabsTrigger>
+                    )}
                 </TabsList>
                 <TabsContent
                     value="overview"
@@ -561,6 +571,33 @@ function DeviceWorkspace({ id }: { id: string }) {
                         </Tool>
                     </section>
                 </TabsContent>
+                {auth.can("files.read") && (
+                    <TabsContent
+                        value="files"
+                        forceMount
+                        hidden={tab !== "files"}
+                    >
+                        <section
+                            id="device-files"
+                            aria-labelledby="device-files-title"
+                            className="panel"
+                        >
+                            <h2 id="device-files-title">
+                                <FolderOpen size={18} aria-hidden="true" />{" "}
+                                Files
+                            </h2>
+                            <p className="muted">
+                                Browse the phone, preview scripts and upload
+                                files or whole folders where you need them.
+                            </p>
+                            <FileManager
+                                deviceId={id}
+                                online={online}
+                                active={filesOpened}
+                            />
+                        </section>
+                    </TabsContent>
+                )}
             </Tabs>
         </div>
     );

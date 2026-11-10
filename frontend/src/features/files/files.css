@@ -1,0 +1,217 @@
+.file-manager {
+    display: grid;
+    gap: 12px;
+}
+.file-locations {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.file-locations [aria-pressed="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.file-path-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.file-path-field {
+    flex: 1;
+    min-width: 0;
+}
+.file-path-field input {
+    width: 100%;
+}
+.file-breadcrumbs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 4px;
+    font-size: 13px;
+    color: var(--muted);
+}
+.file-breadcrumbs button,
+.file-name button {
+    display: inline;
+    justify-self: start;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    padding: 4px 2px;
+    min-height: 0;
+    cursor: pointer;
+    text-align: left;
+}
+.file-breadcrumbs button:hover,
+.file-name button:hover {
+    color: var(--accent);
+    text-decoration: underline;
+}
+.file-breadcrumbs [aria-current="page"] {
+    color: var(--text);
+    font-weight: 600;
+}
+.file-toolbar {
+    align-items: center;
+}
+.file-transfer {
+    display: grid;
+    gap: 8px;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel-raised);
+}
+.file-transfer-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+}
+.file-transfer-head > div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.file-progress {
+    width: 100%;
+    height: 8px;
+    accent-color: var(--accent);
+}
+.file-overwrite {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    color: var(--text);
+    font-weight: 500;
+}
+.file-notice {
+    margin: 0;
+    color: var(--green);
+}
+.file-drop {
+    border: 1px dashed transparent;
+    border-radius: 12px;
+}
+.file-drop[data-dragging] {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.file-heading {
+    overflow-wrap: anywhere;
+    font-size: 14px;
+}
+.file-table table {
+    table-layout: fixed;
+    width: 100%;
+}
+.file-table th:first-child {
+    width: 46%;
+}
+.file-table th:nth-child(2) {
+    width: 12%;
+}
+.file-table th:last-child {
+    width: 236px;
+}
+.file-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--panel);
+    box-shadow: 0 1px 0 var(--border);
+}
+.file-table .numeric {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.file-name {
+    display: grid;
+    grid-template-columns: 16px 1fr;
+    align-items: center;
+    column-gap: 8px;
+    overflow-wrap: anywhere;
+}
+.file-name svg {
+    color: var(--muted);
+}
+.file-mode {
+    grid-column: 2;
+    font-size: 12px;
+    color: var(--muted);
+}
+.file-row-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+.file-name-form {
+    display: grid;
+    gap: 12px;
+}
+.file-name-form label {
+    display: grid;
+    gap: 6px;
+}
+.file-preview-dialog {
+    width: min(960px, calc(100vw - 32px));
+    max-width: none;
+}
+.file-preview {
+    max-height: min(60svh, 36rem);
+    overflow: auto;
+    margin: 0;
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--inset);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre;
+    tab-size: 4;
+}
+@media (max-width: 760px) {
+    .file-path-bar {
+        flex-wrap: wrap;
+    }
+    .file-path-field {
+        flex-basis: 100%;
+        order: -1;
+    }
+    .file-path-field input {
+        font-size: 16px;
+    }
+    .file-table table,
+    .file-table tbody,
+    .file-table tr,
+    .file-table td {
+        display: block;
+        width: 100%;
+    }
+    .file-table thead {
+        display: none;
+    }
+    .file-table tr {
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border);
+    }
+    .file-table td {
+        padding: 2px 0;
+        text-align: left;
+    }
+    .file-table .numeric {
+        text-align: left;
+    }
+    .file-table .device-cell-label {
+        display: inline-block;
+        min-width: 80px;
+        color: var(--muted);
+        font-size: 12px;
+    }
+    .file-row-actions {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+}

@@ -41,6 +41,8 @@ ADMIN = OPERATOR | {
     "alerts.manage",
     "apps.install",
     "apps.uninstall",
+    "files.read",
+    "files.write",
     "control.reboot",
     "control.reboot_special",
     "audit.read",

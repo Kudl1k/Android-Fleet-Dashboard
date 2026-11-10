@@ -47,6 +47,10 @@ from android_fleet.devices.registry import (
 )
 from android_fleet.devices.registry_models import DeviceRegistration, RegisteredDevice
 from android_fleet.devices.service import DeviceUnavailable, FleetService
+from android_fleet.files.api import router as files_router
+from android_fleet.files.backend import AdbFileBackend, FileBackend
+from android_fleet.files.memory import MemoryFileBackend
+from android_fleet.files.uploads import Upload, UploadManager
 from android_fleet.metrics.exporter import render_metrics
 from android_fleet.metrics.history import HistoryError, InvalidHistoryQuery, MetricHistoryStore
 from android_fleet.screen.api import router as screen_router
@@ -170,6 +174,30 @@ def create_app(
         else state_directory / "operations.sqlite3",
         setup=DeviceSetup(client, service, profiles, state_directory / "control-artifacts"),
     )
+    file_backend: FileBackend = (
+        MemoryFileBackend() if isinstance(client, FakeAdbClient) else AdbFileBackend(client)
+    )
+
+    async def upload_finished(upload: Upload) -> None:
+        await security.audit(
+            upload.actor,
+            upload.device_id,
+            "files.upload",
+            upload.id,
+            "allowed",
+            "succeeded" if upload.state == "completed" else "failed",
+            error=None if upload.state == "completed" else "transfer_failed",
+        )
+
+    file_uploads = UploadManager(
+        file_backend,
+        service.get,
+        state_directory / "file-transfers",
+        max_bytes=configuration.files_upload_max_bytes,
+        max_files=configuration.files_upload_max_files,
+        reserve_bytes=configuration.files_disk_reserve_bytes,
+        on_finish=upload_finished,
+    )
     alert_store = AlertStore(alert_path)
     alert_engine = AlertEngine(
         alert_store,
@@ -190,6 +218,7 @@ def create_app(
             await pairing.initialize()
             await profiles.initialize()
             await terminals.initialize()
+            await file_uploads.initialize()
 
             async def maintain_security() -> None:
                 while True:
@@ -261,6 +290,7 @@ def create_app(
             finally:
                 try:
                     await operations.close()
+                    await file_uploads.close()
                     await terminals.close()
                     await screens.close()
                     await alert_store.close()
@@ -425,6 +455,15 @@ def create_app(
     application.include_router(control_router(operations, security))
     application.include_router(screen_router(screens, security))
     application.include_router(terminal_router(terminals, security))
+    application.include_router(
+        files_router(
+            file_backend,
+            file_uploads,
+            service,
+            security,
+            download_max_bytes=configuration.files_download_max_bytes,
+        )
+    )
     application.include_router(profiles.router(security))
     application.include_router(pairing.router())
     application.include_router(settings_router(runtime, service, security))

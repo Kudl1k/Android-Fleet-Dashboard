@@ -76,6 +76,13 @@ class FakeAdbClient:
     async def push(self, serial: str, local: Path, remote: str) -> None:
         self.calls.append((serial, ("push", str(local), remote)))
 
+    async def push_tree(self, serial: str, local: Path, remote: str, *, timeout: float) -> None:
+        self.calls.append((serial, ("push", str(local), remote)))
+
+    async def pull(self, serial: str, remote: str, local: Path, *, timeout: float) -> None:
+        self.calls.append((serial, ("pull", remote, str(local))))
+        await asyncio.to_thread(local.write_bytes, b"")
+
     async def forward(self, serial: str, socket: str) -> int:
         raise RuntimeError("Live video unavailable on fake devices")
 

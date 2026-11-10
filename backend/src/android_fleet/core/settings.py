@@ -232,6 +232,27 @@ class Settings(BaseSettings):
     apk_max_bytes: int = Field(
         default=67108864, ge=1024, le=536870912, validation_alias="ANDROID_FLEET_APK_MAX_BYTES"
     )
+    files_upload_max_bytes: int = Field(
+        default=2147483648,
+        ge=1048576,
+        le=17179869184,
+        validation_alias="ANDROID_FLEET_FILES_UPLOAD_MAX_BYTES",
+    )
+    files_upload_max_files: int = Field(
+        default=10000, ge=1, le=100000, validation_alias="ANDROID_FLEET_FILES_UPLOAD_MAX_FILES"
+    )
+    files_download_max_bytes: int = Field(
+        default=1073741824,
+        ge=1048576,
+        le=17179869184,
+        validation_alias="ANDROID_FLEET_FILES_DOWNLOAD_MAX_BYTES",
+    )
+    files_disk_reserve_bytes: int = Field(
+        default=268435456,
+        ge=0,
+        le=17179869184,
+        validation_alias="ANDROID_FLEET_FILES_DISK_RESERVE_BYTES",
+    )
     screenshot_max_bytes: int = Field(
         default=16777216,
         ge=1024,
