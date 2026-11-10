@@ -18,6 +18,9 @@ from android_fleet.devices.models import DeviceState
 from android_fleet.discovery.models import MdnsService
 from android_fleet.execution.models import CommandResult
 
+# File manager uploads land in one per-upload staging directory before a shell copy.
+FILE_STAGING = re.compile(r"/data/local/tmp/fleet-files-[0-9a-f]{32}")
+
 
 class RunningAdbProcess:
     """Own a long-lived ADB shell and drain output without retaining device data."""
@@ -213,6 +216,35 @@ class SubprocessAdbClient:
         result = await self._run(["-s", serial, "push", str(local), remote], 30.0)
         if result.timeout or result.exit_code != 0:
             raise RuntimeError("Unable to stage scrcpy server")
+
+    async def push_tree(self, serial: str, local: Path, remote: str, *, timeout: float) -> None:
+        if (
+            not serial
+            or serial.startswith("-")
+            or not await asyncio.to_thread(local.is_dir)
+            or not FILE_STAGING.fullmatch(remote)
+        ):
+            raise ValueError("Invalid file staging push")
+        result = await self._run(["-s", serial, "push", str(local), remote], timeout)
+        if result.timeout:
+            raise TimeoutError("File transfer timed out")
+        if result.exit_code != 0:
+            raise RuntimeError("Unable to transfer files to the device")
+
+    async def pull(self, serial: str, remote: str, local: Path, *, timeout: float) -> None:
+        if (
+            not serial
+            or serial.startswith("-")
+            or not remote.startswith("/")
+            or "\n" in remote
+            or "\0" in remote
+        ):
+            raise ValueError("Invalid file pull")
+        result = await self._run(["-s", serial, "pull", remote, str(local)], timeout)
+        if result.timeout:
+            raise TimeoutError("File transfer timed out")
+        if result.exit_code != 0:
+            raise RuntimeError("Unable to transfer the file from the device")
 
     async def forward(self, serial: str, socket: str) -> int:
         if not serial or serial.startswith("-") or not re.fullmatch(r"scrcpy_[0-9a-f]{8}", socket):

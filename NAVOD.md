@@ -137,6 +137,7 @@ Naměřeno ve fake režimu: celý stack zabírá ~160 MB RAM, takže **RAM stač
 | Program runs | stránka `/runs`: souhrn každého runu (CPU, RAM, teplota, throttling, baterie), porovnání dvou runů, export CSV |
 | Nastavení | stránka `/settings`: interval sběru, kontroly spojení a alertů za běhu; interval sběru i pro jednotlivé zařízení |
 | USB most | `scripts/usb-bridge.ps1` pro sítě s izolací klientů |
+| Soubory | záložka **Files** v detailu zařízení (jen administrátor): procházení, náhled skriptů, stažení, nová složka, přejmenování, smazání a nahrání souborů i celých složek (např. benchmark do Termux home). Nahrání se nejdřív složí na serveru a na telefon jde jedním `adb push`; zápis jen do `/sdcard`, `/data/local/tmp` a s rootem do Termux home. Limity: `ANDROID_FLEET_FILES_*` v `.env` |
 | Malá VM | `docker-compose.school.yml`, `deploy/school/ship_images.sh` |
 
 Podrobnosti o metrikách jsou v [docs/METRICS.md](docs/METRICS.md).
