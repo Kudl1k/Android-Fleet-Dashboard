@@ -10,7 +10,7 @@ from android_fleet.adb.base import AdbClient
 from android_fleet.adb.connection import ConnectionManager
 from android_fleet.adb.connection_models import ConnectionObservation
 from android_fleet.devices.models import ConnectionType, Device, DeviceCapability, DeviceState
-from android_fleet.devices.probe import DeviceProbe, parse_getprop
+from android_fleet.devices.probe import PROBED_CAPABILITIES, DeviceProbe, parse_getprop
 from android_fleet.devices.registry import DeviceNotFound, SQLiteDeviceRegistry
 from android_fleet.devices.registry_models import DeviceRegistration, RegisteredDevice
 from android_fleet.discovery.models import DiscoveredDevice, DiscoverySnapshot
@@ -59,6 +59,8 @@ class FleetService:
         self._retired_metric_tasks: set[asyncio.Task[bool | None]] = set()
         self._generation: dict[str, int] = {}
         self._probed_at: dict[str, float] = {}
+        # Bumped by every capability probe, so a collection that overlaps one can tell.
+        self._probe_epoch: dict[str, int] = {}
         self._force_probe: set[str] = set()
         self._capability_refresh = capability_refresh_seconds
         self._closing = False
@@ -142,9 +144,15 @@ class FleetService:
                     or monotonic() - self._probed_at.get(config.id, 0) >= self._capability_refresh
                 )
                 if refresh:
-                    self._invalidate_metrics(config.id)
+                    # The periodic re-probe of a device that stayed connected keeps its
+                    # collectors: dropping them loses the CPU baseline, so every refresh
+                    # would leave a hole in CPU usage. Reconnects and forced probes still
+                    # start over.
+                    if not same_connection or config.id in self._force_probe:
+                        self._invalidate_metrics(config.id)
                     await DeviceProbe(self.adb).probe(device)
                     self._probed_at[config.id] = monotonic()
+                    self._probe_epoch[config.id] = self._probe_epoch.get(config.id, 0) + 1
                     self._force_probe.discard(config.id)
                 if device.state == DeviceState.ONLINE and not same_connection:
                     await self.registry.mark_connected(config.id, datetime.now(UTC))
@@ -181,7 +189,9 @@ class FleetService:
     def history_healthy(self) -> bool:
         return self._history_write_healthy and self._history_prune_healthy
 
-    async def _collect_device(self, device: Device, generation: int) -> bool | None:
+    async def _collect_device(
+        self, device: Device, generation: int, probe_epoch: int
+    ) -> bool | None:
         try:
             async with self._metric_semaphore:
                 snapshot = await self.pipeline.collect(device, self.adb)
@@ -195,7 +205,12 @@ class FleetService:
                         or current.serial != device.serial
                     ):
                         return None
-                    current.capabilities = set(device.capabilities)
+                    if self._probe_epoch.get(device.id, 0) == probe_epoch:
+                        current.capabilities = set(device.capabilities)
+                    else:
+                        # A probe finished during this sample: it decides its own
+                        # capabilities, the sample decides the metric ones.
+                        current.capabilities |= device.capabilities - PROBED_CAPABILITIES
                     self.snapshots[device.id] = snapshot
                 # Persistence runs outside the connectivity/configuration lock.
                 try:
@@ -229,7 +244,11 @@ class FleetService:
                 task = self._metric_tasks.get(device.id)
                 if task is None or task.done():
                     task = asyncio.create_task(
-                        self._collect_device(deepcopy(device), self._generation.get(device.id, 0))
+                        self._collect_device(
+                            deepcopy(device),
+                            self._generation.get(device.id, 0),
+                            self._probe_epoch.get(device.id, 0),
+                        )
                     )
                     self._metric_tasks[device.id] = task
                 tasks.append(task)
@@ -258,7 +277,11 @@ class FleetService:
             generation = self.observation_generation(device_id)
             task = self._metric_tasks.get(device_id)
             if task is None or task.done():
-                task = asyncio.create_task(self._collect_device(deepcopy(device), generation))
+                task = asyncio.create_task(
+                    self._collect_device(
+                        deepcopy(device), generation, self._probe_epoch.get(device_id, 0)
+                    )
+                )
                 self._metric_tasks[device_id] = task
         try:
             result = await asyncio.shield(task)

@@ -7,6 +7,16 @@ from android_fleet.collectors.memory import parse_memory
 from android_fleet.devices.models import Device, DeviceCapability, DeviceState
 from android_fleet.execution.models import CommandResult
 
+# What a probe decides; every other capability is learned by the metric collectors.
+PROBED_CAPABILITIES = frozenset(
+    {
+        DeviceCapability.ADB_SHELL,
+        DeviceCapability.ROOT_SHELL,
+        DeviceCapability.BATTERY_METRICS,
+        DeviceCapability.MEMORY_METRICS,
+    }
+)
+
 
 def parse_getprop(output: str) -> dict[str, str]:
     """Ignore unsupported/malformed lines without assuming property availability."""

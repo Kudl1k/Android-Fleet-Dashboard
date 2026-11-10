@@ -3,10 +3,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 
 from android_fleet.adb.fake import FakeAdbClient
 from android_fleet.core.settings import Settings
-from android_fleet.devices.models import DeviceState
+from android_fleet.devices.models import DeviceCapability, DeviceState
 from android_fleet.execution.models import CommandResult
 from android_fleet.main import create_app
 from android_fleet.metrics.history import HistoryError
@@ -127,6 +128,70 @@ async def test_cpu_baseline_resets_after_manual_disconnect(tmp_path: Path) -> No
         assert "cpu_usage" in {
             value.name for value in app.state.fleet.snapshots["pixel-rooted"].values
         }
+
+
+def cpu_names(app: FastAPI) -> set[str]:
+    return {value.name for value in app.state.fleet.snapshots["pixel-rooted"].values}
+
+
+async def test_periodic_capability_probe_keeps_cpu_baseline(tmp_path: Path) -> None:
+    adb = BlockingMetricsAdb()
+    app = create_app(adb, settings(tmp_path))
+    async with app.router.lifespan_context(app):
+        await app.state.fleet.collect_metrics()
+        assert "cpu_usage" in cpu_names(app)
+        app.state.fleet._capability_refresh = 0
+        adb.calls.clear()
+        await app.state.fleet.poll(collect=False)
+        assert ("pixel-rooted", ("getprop",)) in adb.calls
+        await app.state.fleet.collect_metrics()
+        assert "cpu_usage" in cpu_names(app)
+
+
+async def test_forced_capability_probe_still_starts_over(tmp_path: Path) -> None:
+    adb = BlockingMetricsAdb()
+    app = create_app(adb, settings(tmp_path))
+    async with app.router.lifespan_context(app):
+        await app.state.fleet.collect_metrics()
+        assert "cpu_usage" in cpu_names(app)
+        await app.state.fleet.refresh_capabilities("pixel-rooted")
+        assert "cpu_usage" not in cpu_names(app)
+
+
+class RootLossAdb(BlockingMetricsAdb):
+    root_lost = False
+
+    async def shell(
+        self, serial: str, argv: tuple[str, ...], *, timeout: float = 10.0
+    ) -> CommandResult:
+        if self.root_lost and argv == ("su", "-c", "id -u"):
+            return CommandResult(stderr="su: permission denied", exit_code=1)
+        return await super().shell(serial, argv, timeout=timeout)
+
+
+async def test_sample_overlapping_periodic_probe_keeps_probe_capabilities(
+    tmp_path: Path,
+) -> None:
+    adb = RootLossAdb()
+    app = create_app(adb, settings(tmp_path, metrics_cycle_timeout=5))
+    async with app.router.lifespan_context(app):
+        fleet = app.state.fleet
+        before = fleet.snapshots["pixel-rooted"].observed_at
+        assert DeviceCapability.ROOT_SHELL in fleet.get("pixel-rooted").capabilities
+        adb.blocked_command = ("cat", "/proc/stat")
+        collecting = asyncio.create_task(fleet.collect_metrics())
+        await asyncio.wait_for(adb.entered.wait(), timeout=1)
+        # The probe runs while the sample, started with root, is still collecting.
+        adb.root_lost = True
+        fleet._capability_refresh = 0
+        await asyncio.wait_for(fleet.poll(collect=False), timeout=1)
+        adb.release.set()
+        await collecting
+        assert not adb.cancelled.is_set()
+        assert fleet.snapshots["pixel-rooted"].observed_at > before
+        capabilities = fleet.get("pixel-rooted").capabilities
+        assert DeviceCapability.ROOT_SHELL not in capabilities
+        assert {DeviceCapability.ADB_SHELL, DeviceCapability.CPU_METRICS} <= capabilities
 
 
 async def test_history_persists_when_runtime_snapshots_are_disconnected(tmp_path: Path) -> None:
