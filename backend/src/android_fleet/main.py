@@ -157,6 +157,10 @@ def create_app(
     service.metrics_interval_for = lambda device_id: runtime.device_value(
         device_id, "metrics_interval_seconds"
     )
+
+    def metrics_max_age(device_id: str) -> float:
+        return service.metrics_max_age(device_id, configuration.metrics_max_age_seconds)
+
     operations = Manager(
         client,
         service,
@@ -166,10 +170,6 @@ def create_app(
         else state_directory / "operations.sqlite3",
         setup=DeviceSetup(client, service, profiles, state_directory / "control-artifacts"),
     )
-
-    def metrics_max_age(device_id: str) -> float:
-        return service.metrics_max_age(device_id, configuration.metrics_max_age_seconds)
-
     alert_store = AlertStore(alert_path)
     alert_engine = AlertEngine(
         alert_store,
