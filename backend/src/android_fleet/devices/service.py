@@ -19,6 +19,9 @@ from android_fleet.metrics.collection import MetricPipeline
 from android_fleet.metrics.history import HistoryError, MetricHistoryStore
 from android_fleet.metrics.models import MetricSnapshot
 
+# Snapshots older than this many collection intervals of their device are stale.
+STALE_AFTER_INTERVALS = 3
+
 
 class DeviceUnavailable(RuntimeError):
     pass
@@ -267,6 +270,16 @@ class FleetService:
         if result is None or self.observation_generation(device_id) != generation:
             return None
         return self.snapshots.get(device_id)
+
+    def metrics_max_age(self, device_id: str, minimum: float) -> float:
+        """How long a snapshot stays current for this device.
+
+        A device sampled every few minutes must not look stale between samples, so the
+        limit grows with its collection interval and never drops below ``minimum``.
+        """
+        if self.metrics_interval_for is None:
+            return minimum
+        return max(minimum, STALE_AFTER_INTERVALS * self.metrics_interval_for(device_id))
 
     async def run_metrics(self, interval: float | Callable[[], float]) -> None:
         """Sample each online device on its own cadence.

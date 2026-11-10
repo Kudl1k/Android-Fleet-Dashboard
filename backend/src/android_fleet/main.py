@@ -166,10 +166,15 @@ def create_app(
         else state_directory / "operations.sqlite3",
         setup=DeviceSetup(client, service, profiles, state_directory / "control-artifacts"),
     )
+
+    def metrics_max_age(device_id: str) -> float:
+        return service.metrics_max_age(device_id, configuration.metrics_max_age_seconds)
+
     alert_store = AlertStore(alert_path)
     alert_engine = AlertEngine(
         alert_store,
         service,
+        max_age_for=metrics_max_age,
         max_age_seconds=configuration.metrics_max_age_seconds,
         retention_seconds=configuration.alerts_retention_seconds,
     )
@@ -629,7 +634,7 @@ def create_app(
         stale = False
         if snapshot is not None:
             age = (datetime.now(UTC) - snapshot.observed_at).total_seconds()
-            stale = age < 0 or age > configuration.metrics_max_age_seconds
+            stale = age < 0 or age > metrics_max_age(device_id)
         result = current_response(device, snapshot, stale=stale)
         if stale or device.state != DeviceState.ONLINE:
             result.values = []
@@ -659,6 +664,7 @@ def create_app(
                 list(service.devices.values()),
                 service.snapshots,
                 max_age_seconds=configuration.metrics_max_age_seconds,
+                max_age_for=metrics_max_age,
             )
             + (
                 f"android_alert_evaluation_healthy {int(alert_engine.healthy)}\n"

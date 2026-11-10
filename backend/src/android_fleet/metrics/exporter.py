@@ -1,7 +1,7 @@
 """Prometheus names, bounded labels and freshness belong to the export boundary."""
 
 import math
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 
 from prometheus_client import CollectorRegistry, generate_latest
@@ -71,6 +71,7 @@ class FleetExporter:
         snapshots: Mapping[str, MetricSnapshot],
         *,
         max_age_seconds: float = 120,
+        max_age_for: Callable[[str], float] | None = None,
         now: datetime | None = None,
     ) -> None:
         if not math.isfinite(max_age_seconds) or max_age_seconds <= 0:
@@ -78,6 +79,8 @@ class FleetExporter:
         self.devices = devices
         self.snapshots = snapshots
         self.max_age_seconds = max_age_seconds
+        # Per-device limit, e.g. longer for a device collected every few minutes.
+        self.max_age_for = max_age_for
         self.now = now or datetime.now(UTC)
 
     def collect(self) -> Iterable[GaugeMetricFamily | CounterMetricFamily]:
@@ -126,7 +129,8 @@ class FleetExporter:
             if snapshot.observed_at.tzinfo is None:
                 continue
             age = (self.now - snapshot.observed_at).total_seconds()
-            if age < 0 or age > self.max_age_seconds:
+            limit = self.max_age_for(device.id) if self.max_age_for else self.max_age_seconds
+            if age < 0 or age > limit:
                 continue
             collected.add_metric([device.id], snapshot.observed_at.timestamp())
             identities: set[tuple[str, tuple[str, ...]]] = set()
@@ -164,8 +168,13 @@ def render_metrics(
     snapshots: Mapping[str, MetricSnapshot],
     *,
     max_age_seconds: float = 120,
+    max_age_for: Callable[[str], float] | None = None,
     now: datetime | None = None,
 ) -> bytes:
     registry = CollectorRegistry()
-    registry.register(FleetExporter(devices, snapshots, max_age_seconds=max_age_seconds, now=now))
+    registry.register(
+        FleetExporter(
+            devices, snapshots, max_age_seconds=max_age_seconds, max_age_for=max_age_for, now=now
+        )
+    )
     return generate_latest(registry)
