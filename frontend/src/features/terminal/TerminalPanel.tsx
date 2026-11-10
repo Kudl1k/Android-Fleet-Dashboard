@@ -378,12 +378,22 @@ function TerminalTab({
                     variant="destructive"
                     className="terminal-close"
                     onClick={() => {
+                        // A failed connection attempt never received a session,
+                        // so there is nothing to terminate on the server.
+                        if (!sessionId.current) {
+                            onClose();
+                            return;
+                        }
                         void request(
-                            `/api/v1/terminal/sessions/${sessionId.current}`,
+                            `/api/v1/terminal/sessions/${encodeURIComponent(sessionId.current)}`,
                             { method: "DELETE" },
                         )
                             .then(onClose)
-                            .catch((err) => setError(err.message));
+                            .catch((err) => {
+                                // The server already forgot the session.
+                                if (err?.status === 404) onClose();
+                                else setError(err.message);
+                            });
                     }}
                 >
                     <X aria-hidden="true" />
