@@ -212,11 +212,17 @@ class TerminalManager:
             await self.ssh_gateway.authorize(config.profile_id, actor)
             profile = await self.ssh_gateway.profiles.get(config.profile_id)
             device_id = profile.device_id
+            if config.record_device and config.record_device_id:
+                if device_id and device_id != config.record_device_id:
+                    raise HTTPException(409, "SSH profile is linked to a different device")
+                device_id = config.record_device_id
             if device_id:
                 await self.security.authorize_device(actor, device_id, permission)
         if config.record_device:
             if not device_id:
-                raise HTTPException(409, "Link the SSH profile to an Android device to record it")
+                raise HTTPException(
+                    409, "Choose or link an Android device to record its statistics"
+                )
             await self.security.authorize_device(actor, device_id, "telemetry.read")
             device = self.service.get(device_id)
             if (
