@@ -55,6 +55,7 @@ type Target = {
     profile_id?: string;
     command?: string;
     record_device?: boolean;
+    record_device_id?: string;
     sample_interval?: number;
     session_id?: string;
 };
@@ -462,6 +463,9 @@ export default function TerminalPanel({
     const selectedProfile =
         profiles.find((p) => p.id === profile) ??
         (initialProfile?.id === profile ? initialProfile : undefined);
+    // A profile linked to a device records that device; otherwise record the
+    // device whose page the run is started from.
+    const recordTarget = selectedProfile?.device_id ?? deviceId;
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const runActive = history.some(
         (item) => item.command && item.state === "active",
@@ -726,11 +730,16 @@ export default function TerminalPanel({
                                         connection_type: "ssh",
                                         profile_id: profile,
                                         command,
-                                        ...(recordDevice &&
-                                        selectedProfile?.device_id
+                                        ...(recordDevice && recordTarget
                                             ? {
                                                   record_device: true,
                                                   sample_interval: 15,
+                                                  ...(selectedProfile?.device_id
+                                                      ? {}
+                                                      : {
+                                                            record_device_id:
+                                                                recordTarget,
+                                                        }),
                                               }
                                             : {}),
                                     },
@@ -745,7 +754,7 @@ export default function TerminalPanel({
                         <FieldLabel className="device-record-option">
                             <Checkbox
                                 checked={recordDevice}
-                                disabled={!selectedProfile?.device_id}
+                                disabled={!recordTarget}
                                 onCheckedChange={(value) =>
                                     setRecordDevice(value === true)
                                 }
@@ -753,7 +762,7 @@ export default function TerminalPanel({
                             Record device statistics (15 seconds)
                         </FieldLabel>
                     </Field>
-                    {selectedProfile && !selectedProfile.device_id && (
+                    {!recordTarget && selectedProfile && (
                         <p className="muted">
                             Link this SSH profile to an Android device to record
                             its statistics.

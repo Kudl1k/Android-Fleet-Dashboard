@@ -20,6 +20,8 @@ class TerminalConfig(BaseModel):
     profile_id: str | None = Field(default=None, min_length=1, max_length=128)
     command: str | None = Field(default=None, min_length=1, max_length=4096)
     record_device: bool = False
+    # Android device to record when the SSH profile is not linked to one itself.
+    record_device_id: str | None = Field(default=None, min_length=1, max_length=128)
     sample_interval: float = Field(default=15.0, ge=1, le=60)
     cols: int = Field(default=80, ge=2, le=500)
     rows: int = Field(default=24, ge=2, le=200)
@@ -28,6 +30,8 @@ class TerminalConfig(BaseModel):
     def target(self) -> Self:
         if self.record_device and self.command is None:
             raise ValueError("Device recording requires a program command")
+        if self.record_device_id is not None and not self.record_device:
+            raise ValueError("A recorded device ID requires device recording")
         if self.command is not None and self.connection_type != "ssh":
             raise ValueError("Recorded commands require SSH")
         if self.connection_type == "adb" and (not self.device_id or self.profile_id):

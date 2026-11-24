@@ -294,6 +294,47 @@ it("records linked device statistics at a 15 second interval", async () => {
     );
 });
 
+it("records the current device when the SSH profile is not linked to one", async () => {
+    render(
+        <TerminalPanel
+            deviceId="phone"
+            initialProfile={{
+                id: "ssh1",
+                name: "Host",
+                host: "host",
+                port: 22,
+                username: "user",
+                enabled: true,
+                auth_method: "key",
+            }}
+        />,
+    );
+    fireEvent.change(screen.getByLabelText("Program command"), {
+        target: { value: "benchmark" },
+    });
+    const option = screen.getByLabelText("Record device statistics (15 seconds)");
+    expect(option).toBeEnabled();
+    expect(option).toBeChecked();
+    fireEvent.click(screen.getByText("Record run"));
+    await waitFor(() =>
+        expect(request).toHaveBeenCalledWith(
+            "/api/v1/terminal/sessions",
+            expect.objectContaining({
+                body: JSON.stringify({
+                    connection_type: "ssh",
+                    profile_id: "ssh1",
+                    command: "benchmark",
+                    record_device: true,
+                    sample_interval: 15,
+                    record_device_id: "phone",
+                    cols: 80,
+                    rows: 24,
+                }),
+            }),
+        ),
+    );
+});
+
 it("keeps connection methods named and closes a session only from its own tools", async () => {
     render(<TerminalPanel deviceId="d1" />);
     const adb = screen.getByRole("group", { name: "ADB shell" });

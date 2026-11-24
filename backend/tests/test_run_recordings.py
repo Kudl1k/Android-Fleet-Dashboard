@@ -137,6 +137,27 @@ async def test_saved_telemetry_survives_deleted_ssh_profile(runtime: Any) -> Non
     assert denial.value.status_code == 404
 
 
+async def test_unlinked_profile_records_the_requested_device(runtime: Any) -> None:
+    manager, actor, _, gateway, _ = runtime
+    gateway.profiles.get.return_value = SimpleNamespace(device_id=None)
+    unlinked = TerminalConfig(
+        connection_type="ssh", profile_id="approved", command="x", record_device=True
+    )
+    with pytest.raises(HTTPException) as missing:
+        await manager.create(actor, unlinked)
+    assert missing.value.status_code == 409
+    session = await manager.create(actor, unlinked.model_copy(update={"record_device_id": "phone"}))
+    assert session.device_id == "phone"
+    assert session.public()["device_recording"]["enabled"]
+    await manager.stop(session)
+    gateway.profiles.get.return_value = SimpleNamespace(device_id="other")
+    with pytest.raises(HTTPException) as mismatch:
+        await manager.create(actor, unlinked.model_copy(update={"record_device_id": "phone"}))
+    assert mismatch.value.status_code == 409
+    with pytest.raises(ValueError):
+        TerminalConfig(connection_type="ssh", profile_id="p", record_device_id="phone")
+
+
 async def test_offline_and_denied_observations_never_fabricate_samples(runtime: Any) -> None:
     manager, actor, fleet, _, _ = runtime
     session = await manager.create(actor, config())
