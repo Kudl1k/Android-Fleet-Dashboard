@@ -121,6 +121,22 @@ async def test_samples_isolated_saved_paginated_and_survive_restart(runtime: Any
     ).status_code == 401
 
 
+async def test_saved_telemetry_survives_deleted_ssh_profile(runtime: Any) -> None:
+    manager, actor, _, gateway, client = runtime
+    session = await manager.create(actor, config())
+    await manager.stop(session)
+    gateway.authorize.side_effect = HTTPException(404, "SSH profile not found")
+    gateway.profiles.get.side_effect = HTTPException(404, "SSH profile not found")
+    url = f"/api/v1/terminal/sessions/{session.id}/telemetry"
+    assert (await client.get(url)).status_code == 200  # closed run still in memory
+    manager.sessions.pop(session.id)
+    assert (await client.get(url)).status_code == 200  # restored from storage
+    other = Actor("other", "administrator", actor.permissions)
+    with pytest.raises(HTTPException) as denial:
+        await manager.recording_metadata(session.id, other)
+    assert denial.value.status_code == 404
+
+
 async def test_offline_and_denied_observations_never_fabricate_samples(runtime: Any) -> None:
     manager, actor, fleet, _, _ = runtime
     session = await manager.create(actor, config())
