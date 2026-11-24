@@ -163,7 +163,9 @@ class TerminalManager:
             if actor.device_ids is None or item.get("device_id") in actor.device_ids
         ]
 
-    async def authorize(self, session: Session, actor: Actor) -> None:
+    async def authorize(
+        self, session: Session, actor: Actor, *, check_profile: bool = True
+    ) -> None:
         permission = "terminal:" + session.config.connection_type
         if (
             actor.identity != session.owner.identity
@@ -183,7 +185,7 @@ class TerminalManager:
             raise HTTPException(403, "Permission denied")
         if session.device_id:
             await self.security.authorize_device(actor, session.device_id, permission)
-        if session.config.connection_type == "ssh":
+        if check_profile and session.config.connection_type == "ssh":
             await self.ssh_gateway.authorize(session.config.profile_id, actor)
 
     async def create(self, actor: Actor, config: TerminalConfig) -> Session:
@@ -369,8 +371,12 @@ class TerminalManager:
 
     async def recording_metadata(self, sid: str, actor: Actor) -> dict[str, Any]:
         """Authorize saved telemetry even after a closed session leaves memory."""
+        # Saved statistics are read-only history owned by the run's creator. Only a
+        # live run still needs its SSH profile; the profile may be edited or deleted
+        # after the run, and that must not make recorded charts unreadable.
         if sid in self.sessions:
-            session = await self.get(sid, actor)
+            session = self.sessions[sid]
+            await self.authorize(session, actor, check_profile=session.state in ACTIVE)
             if session.device_id:
                 await self.security.authorize_device(actor, session.device_id, "telemetry.read")
             return session.public()
@@ -396,7 +402,7 @@ class TerminalManager:
             ),
             item["device_id"],
         )
-        await self.authorize(restored, actor)
+        await self.authorize(restored, actor, check_profile=False)
         if restored.device_id:
             await self.security.authorize_device(actor, restored.device_id, "telemetry.read")
         return item
